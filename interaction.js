@@ -1,15 +1,15 @@
-import {uid} from './core.js?v=1.4';
-import {diagnostics} from './diagnostics.js?v=1.4';
+import {uid} from './core.js?v=1.5';
+import {diagnostics} from './diagnostics.js?v=1.5';
 export const defaultGroupName=(self,members)=>[self,...members].join('、')+`（${members.length+1}）`;
 export function interactionMethods({esc,btn,avatar}) { return {
  updateBusyButtons(){
   for(const b of this.root.querySelectorAll('[data-action]')){
-   const a=b.dataset.action,busy=(a==='send'||a==='retryMessage'||a==='resendInline')?this.sending:a==='refresh'?this.refreshing:a==='loadModels'?this.loadingModels:this.pendingActions?.has(a);
+   const a=b.dataset.action,busy=(a==='send'||a==='retryMessage'||a==='resendInline')?this.sending:a==='refresh'?this.refreshing:a==='loadModels'?this.loadingModels:a!=='tab'&&this.pendingActions?.has(JSON.stringify([a,b.dataset.id||'']));
    if(busy){if(!b.dataset.idleHtml)b.dataset.idleHtml=b.innerHTML;b.innerHTML='<span class="shr-spinner" aria-label="处理中"></span>';b.disabled=true;b.setAttribute('aria-busy','true');}
    else if(b.dataset.idleHtml){b.innerHTML=b.dataset.idleHtml;delete b.dataset.idleHtml;b.disabled=false;b.removeAttribute('aria-busy');}
   }
  },
- async dispatch(a,id){this.pendingActions ||= new Set();if(this.pendingActions.has(a))return;this.pendingActions.add(a);this.updateBusyButtons();try{return await this.action(a,id);}finally{this.pendingActions.delete(a);this.updateBusyButtons();}},
+ async dispatch(a,id){this.pendingActions ||= new Set();const key=JSON.stringify([a,id||'']);if(this.pendingActions.has(key))return;this.pendingActions.add(key);this.updateBusyButtons();try{return await this.action(a,id);}finally{this.pendingActions.delete(key);this.updateBusyButtons();}},
  editChatMessage(id){
   if(this.sending||this.gen.busy)throw Error('请等待当前回复结束后编辑');
   const m=this.conversation()?.messages.find(m=>m.id===id);if(!m)return;

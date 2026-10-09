@@ -1,7 +1,7 @@
 {
   "display_name": "🍤 鲜虾",
   "author": "Ameki",
-  "version": "1.4",
+  "version": "1.5",
   "description": "独立微信式助手：预设人格聊天、行动选项、公众号订阅、书架与摘抄。",
   "js": "index.js",
   "css": "style.css",

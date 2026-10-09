@@ -1,7 +1,7 @@
-import {uid,clone} from './core.js?v=1.4';
-import {ctx,storyKey,characterItems} from './bridge.js?v=1.4';
-import {activePublishers} from './features.js?v=1.4';
-import {currentCharacter,fishboardStyles,fetchModels} from './chat-integration.js?v=1.4';
+import {uid,clone} from './core.js?v=1.5';
+import {ctx,storyKey,characterItems} from './bridge.js?v=1.5';
+import {activePublishers} from './features.js?v=1.5';
+import {currentCharacter,fishboardStyles,fetchModels} from './chat-integration.js?v=1.5';
 export function wechatMethods({esc,btn,avatar,time,field}){return {
  syncCurrentCharacter(){
   if(!this.state)return null;const ch=currentCharacter();if(!ch)return null;

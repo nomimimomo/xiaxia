@@ -1,13 +1,14 @@
-import { interactionMethods } from './interaction.js?v=1.4';
-import { diagnostics, instrument } from './diagnostics.js?v=1.4';
-import { wechatMethods } from './wechat-ui.js?v=1.4';
-import { readingMethods } from './reading-ui.js?v=1.4';
-import { upgradeFeatures, features, activePublishers, feedSignature, parseChatResponse, parseArticles, compileLocalMacros, chatProtocol } from './features.js?v=1.4';
-import { featureMethods } from './feature-ui.js?v=1.4';
-import { convertText } from './text-script.js?v=1.4';
-import { VERSION, clone, uid, digest, freshState, validateState, parseReply, parseFeed, applyTurn, mergeFeed, worldBucket, sourceStale, migrateLegacy } from './core.js?v=1.4';
-import { Store } from './storage.js?v=1.4';
-import { ctx, presets, snapshot, promptRows, storyKey, storyName, characterItems, storyContext, Generator, sourceMessages } from './bridge.js?v=1.4';
+import { webReadingMethods } from './web-reading.js?v=1.5';
+import { interactionMethods } from './interaction.js?v=1.5';
+import { diagnostics, instrument } from './diagnostics.js?v=1.5';
+import { wechatMethods } from './wechat-ui.js?v=1.5';
+import { readingMethods } from './reading-ui.js?v=1.5';
+import { upgradeFeatures, features, activePublishers, feedSignature, parseChatResponse, parseArticles, compileLocalMacros, chatProtocol } from './features.js?v=1.5';
+import { featureMethods } from './feature-ui.js?v=1.5';
+import { convertText } from './text-script.js?v=1.5';
+import { VERSION, clone, uid, digest, freshState, validateState, parseReply, parseFeed, applyTurn, mergeFeed, worldBucket, sourceStale, migrateLegacy } from './core.js?v=1.5';
+import { Store } from './storage.js?v=1.5';
+import { ctx, presets, snapshot, promptRows, storyKey, storyName, characterItems, storyContext, Generator, sourceMessages } from './bridge.js?v=1.5';
 
 const esc = v => String(v ?? '').replace(/[&<>"']/g, x => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[x]));
 const time = t => new Date(t).toLocaleString([], { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' });
@@ -28,6 +29,7 @@ class Shrimp {
     async init() {
         this.launcher = document.createElement('button'); this.launcher.type = 'button'; this.launcher.id = 'shrimp-launcher'; this.launcher.textContent = '🍤'; this.launcher.title = '鲜虾'; this.launcher.onclick = () => this.open(); document.body.append(this.launcher);
         this.root = document.createElement('section'); this.root.id = 'shrimp-app'; this.root.hidden = true; this.root.setAttribute('aria-label', '鲜虾'); document.body.append(this.root);
+        const fit=()=>{const v=window.visualViewport;this.root.style.setProperty('--shr-vh',(v?.height||innerHeight)+'px');this.root.style.setProperty('--shr-vw',(v?.width||innerWidth)+'px');this.root.style.setProperty('--shr-top',(v?.offsetTop||0)+'px');this.root.style.setProperty('--shr-left',(v?.offsetLeft||0)+'px');};fit();window.addEventListener('resize',fit);window.visualViewport?.addEventListener('resize',fit);window.visualViewport?.addEventListener('scroll',fit);
         this.root.addEventListener('click', e => { const b = e.target.closest('[data-action]'); e.stopPropagation(); if (b) { e.preventDefault(); if (!b.disabled) this.dispatch(b.dataset.action, b.dataset.id).catch(e => this.error(e)); } });
         this.root.addEventListener('submit', e => { e.preventDefault(); e.stopPropagation(); });
         window.addEventListener('pagehide', () => diagnostics.log('page.hide', {stage:this.tab}));
@@ -51,7 +53,7 @@ class Shrimp {
         const b = document.createElement('div'); b.id = 'shrimp-menu'; b.className = 'list-group-item flex-container flexGap5'; b.tabIndex = 0; b.textContent = '🍤 鲜虾'; b.onclick = () => this.open(); b.onkeydown = e => { if (e.key === 'Enter') this.open(); }; menu.append(b);
     }
     async open() { if(this.state)this.syncCurrentCharacter(); this.visible = true; this.root.hidden = false; this.render(); this.installMenu(); this.scheduleScan(1000); }
-    close() { this.visible = false; this.root.hidden = true; }
+    close() { this.webText = ''; this.webKey = null; this.root.querySelector('.shr-web')?.remove(); this.visible = false; this.root.hidden = true; }
     error(e) { diagnostics.log('ui.error', {errorType:e?.name || 'Error', ...this.diagnosticState()}); console.warn('[鲜虾]', e.message); this.status(e.message, true); window.toastr?.error(e.message, '鲜虾'); }
     conversation() { return this.state?.conversations.find(x => x.id === this.state.activeConversation); }
     contact(id) { return this.state.contacts.find(x => x.id === id); }
@@ -104,6 +106,8 @@ class Shrimp {
         if (a === 'copyReport') { await navigator.clipboard.writeText(diagnostics.report(this.diagnosticState())); return; }
         if (a === 'exportReport') return download('鲜虾_错误报告.json', diagnostics.report(this.diagnosticState()));
         diagnostics.log('action', {operation:a, ...this.diagnosticState()});
+        if(a.startsWith('web:'))return this.webAction(a.slice(4),id);
+        if(a==='close'){this.webText='';this.webKey=null;}
         if (a.startsWith('rd:')) return this.readingAction(a.slice(3), id);
         if (a === 'close') return this.close(); if (a === 'dismiss') return this.closeModal();
         if (a === 'reload') { if (this.state && !confirm('重新读取会丢弃尚未保存的本页改动。需要时请先导出。继续？')) return; this.state = await this.store.load(); this.loadError = null; this.status('已重新读取'); this.render(); return; }
@@ -416,6 +420,7 @@ class Shrimp {
         }
     }
 }
+Object.assign(Shrimp.prototype, webReadingMethods({esc,btn,field}));
 Object.assign(Shrimp.prototype, readingMethods({ esc, btn, field, check }));
 Object.assign(Shrimp.prototype, featureMethods({ esc, btn, field, check }));
 Object.assign(Shrimp.prototype, wechatMethods({ esc, btn, avatar, time, field }));

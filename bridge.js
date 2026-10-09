@@ -1,5 +1,6 @@
-import { diagnostics, instrument } from './diagnostics.js?v=1.3.2';
-import { clone, digest, orderedPrompts, parseJSON } from './core.js?v=1.3.2';
+import {compactMessages,safeApiError} from './api-utils.js?v=1.4';
+import { diagnostics, instrument } from './diagnostics.js?v=1.4';
+import { clone, digest, orderedPrompts, parseJSON } from './core.js?v=1.4';
 export const ctx = () => window.SillyTavern?.getContext?.();
 export function presets() {
     const m = ctx()?.getPresetManager?.('openai');
@@ -72,6 +73,7 @@ export class Generator {
         const s = this.getState().settings; this.busy = true;
         try {
             if (s.apiMode === 'custom') {
+                messages=compactMessages(messages);
                 let url; try { url = new URL(s.customUrl.trim()); } catch { throw new Error('请填写完整 API 地址'); }
                 if (!['https:', 'http:'].includes(url.protocol) || url.username || url.password) throw new Error('API 地址格式不支持');
                 url.pathname = url.pathname.replace(/\/+$/, '').replace(/\/(?:chat\/completions|models)$/, '') + '/chat/completions';
@@ -79,10 +81,10 @@ export class Generator {
                 const controller = new AbortController(), timer = setTimeout(() => controller.abort(), 120000);
                 try {
                     diagnostics.log('request.dispatched', {mode:'custom',count:messages.length});
-                    const r = await fetch(url.href, { method: 'POST', signal: controller.signal, headers: { 'Content-Type': 'application/json', ...(s.customKey ? { Authorization: `Bearer ${s.customKey}` } : {}) }, body: JSON.stringify({ model: s.customModel, messages, max_tokens: s.maxTokens, stream: false }) });
+                    const r = await fetch(url.href, { method: 'POST', signal: controller.signal, headers: { 'Content-Type': 'application/json', ...(s.customKey ? { Authorization: `Bearer ${s.customKey}` } : {}) }, body: JSON.stringify({ model: s.customModel.trim(), messages, max_tokens: Number(s.maxTokens) || 4096, stream: false }) });
                     diagnostics.log('request.response', {status:r.status});
-                    if (!r.ok) throw new Error(`API 请求失败（${r.status}）`);
-                    const x = await r.json(); const content = x.choices?.[0]?.message?.content;
+                    if (!r.ok) { const detail=safeApiError(await r.text(),[s.customKey,s.customUrl],messages); diagnostics.apiError(r.status,detail); throw new Error(`API 请求失败（${r.status}）：${detail}`); }
+                    const x = await r.json(); const content = x.choices?.[0]?.message?.content || x.content?.[0]?.text || x.candidates?.[0]?.content?.parts?.map(p=>p.text||'').join('');
                     if (typeof content !== 'string') throw new Error('API 没有返回文本'); return content;
                 } finally { clearTimeout(timer); }
             }

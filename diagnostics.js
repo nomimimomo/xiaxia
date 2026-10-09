@@ -20,6 +20,10 @@ export class Diagnostics {
         this.rows.push({ time: new Date().toISOString(), event, ...safe }); this.rows = this.rows.slice(-500);
         try { this.storage?.setItem(KEY, JSON.stringify(this.rows)); } catch { this.persistence = false; }
     }
+    apiError(status, detail) {
+        this.rows.push({time:new Date().toISOString(),event:'request.error',status,detail});this.rows=this.rows.slice(-500);
+        try{this.storage?.setItem(KEY,JSON.stringify(this.rows));}catch{this.persistence=false;}
+    }
     async run(operation, task, state = () => ({})) {
         const id = `${Date.now()}-${++this.sequence}`, start = Date.now();
         this.active.set(id, { operation, start }); this.log('start', { id, operation, ...state() });
@@ -28,7 +32,7 @@ export class Diagnostics {
         catch (e) { this.log('failure', { id, operation, elapsed: Date.now()-start, errorType: e?.name || 'Error', reason: errorReason(e), ...state() }); throw e; }
         finally { clearInterval(timer); this.active.delete(id); this.log('finished', { id, operation, ...state() }); }
     }
-    report(state = {}) { return JSON.stringify({ version:'1.3.2', persistence:this.persistence, state, active:[...this.active].map(([id,x])=>({id,operation:x.operation,elapsed:Date.now()-x.start})), events:this.rows },null,2); }
+    report(state = {}) { return JSON.stringify({ version:'1.4', persistence:this.persistence, state, active:[...this.active].map(([id,x])=>({id,operation:x.operation,elapsed:Date.now()-x.start})), events:this.rows },null,2); }
 }
 let storage; try { storage = globalThis.localStorage; } catch {}
 export const diagnostics = new Diagnostics(storage);

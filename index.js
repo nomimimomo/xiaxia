@@ -1,13 +1,13 @@
-import { interactionMethods } from './interaction.js?v=1.3.2';
-import { diagnostics, instrument } from './diagnostics.js?v=1.3.2';
-import { wechatMethods } from './wechat-ui.js?v=1.3.2';
-import { readingMethods } from './reading-ui.js?v=1.3.2';
-import { upgradeFeatures, features, activePublishers, feedSignature, parseChatResponse, parseArticles, compileLocalMacros, chatProtocol } from './features.js?v=1.3.2';
-import { featureMethods } from './feature-ui.js?v=1.3.2';
-import { convertText } from './text-script.js?v=1.3.2';
-import { VERSION, clone, uid, digest, freshState, validateState, parseReply, parseFeed, applyTurn, mergeFeed, worldBucket, sourceStale, migrateLegacy } from './core.js?v=1.3.2';
-import { Store } from './storage.js?v=1.3.2';
-import { ctx, presets, snapshot, promptRows, storyKey, storyName, characterItems, storyContext, Generator, sourceMessages } from './bridge.js?v=1.3.2';
+import { interactionMethods } from './interaction.js?v=1.4';
+import { diagnostics, instrument } from './diagnostics.js?v=1.4';
+import { wechatMethods } from './wechat-ui.js?v=1.4';
+import { readingMethods } from './reading-ui.js?v=1.4';
+import { upgradeFeatures, features, activePublishers, feedSignature, parseChatResponse, parseArticles, compileLocalMacros, chatProtocol } from './features.js?v=1.4';
+import { featureMethods } from './feature-ui.js?v=1.4';
+import { convertText } from './text-script.js?v=1.4';
+import { VERSION, clone, uid, digest, freshState, validateState, parseReply, parseFeed, applyTurn, mergeFeed, worldBucket, sourceStale, migrateLegacy } from './core.js?v=1.4';
+import { Store } from './storage.js?v=1.4';
+import { ctx, presets, snapshot, promptRows, storyKey, storyName, characterItems, storyContext, Generator, sourceMessages } from './bridge.js?v=1.4';
 
 const esc = v => String(v ?? '').replace(/[&<>"']/g, x => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[x]));
 const time = t => new Date(t).toLocaleString([], { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' });
@@ -26,10 +26,13 @@ class Shrimp {
     status(s, error = false) { this.statusText = s; this.statusError = error; const el = this.root?.querySelector('.shr-status'); if (el) { el.textContent = s; el.classList.toggle('error', error); } }
     async save() { await this.store.save(); }
     async init() {
-        this.launcher = document.createElement('button'); this.launcher.id = 'shrimp-launcher'; this.launcher.textContent = '🍤'; this.launcher.title = '鲜虾'; this.launcher.onclick = () => this.open(); document.body.append(this.launcher);
+        this.launcher = document.createElement('button'); this.launcher.type = 'button'; this.launcher.id = 'shrimp-launcher'; this.launcher.textContent = '🍤'; this.launcher.title = '鲜虾'; this.launcher.onclick = () => this.open(); document.body.append(this.launcher);
         this.root = document.createElement('section'); this.root.id = 'shrimp-app'; this.root.hidden = true; this.root.setAttribute('aria-label', '鲜虾'); document.body.append(this.root);
-        this.root.addEventListener('click', e => { const b = e.target.closest('[data-action]'); if (b && !b.disabled) this.dispatch(b.dataset.action, b.dataset.id).catch(e => this.error(e)); });
-        this.root.addEventListener('keydown', e => { if (e.key === 'Escape') { if (this.root.querySelector('.shr-modal')) this.closeModal(); else this.close(); } if (e.target.id === 'shr-draft' && e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); this.dispatch('send').catch(e => this.error(e)); } });
+        this.root.addEventListener('click', e => { const b = e.target.closest('[data-action]'); e.stopPropagation(); if (b) { e.preventDefault(); if (!b.disabled) this.dispatch(b.dataset.action, b.dataset.id).catch(e => this.error(e)); } });
+        this.root.addEventListener('submit', e => { e.preventDefault(); e.stopPropagation(); });
+        window.addEventListener('pagehide', () => diagnostics.log('page.hide', {stage:this.tab}));
+        window.addEventListener('beforeunload', () => diagnostics.log('page.beforeunload', {stage:this.tab}));
+        this.root.addEventListener('keydown', e => { e.stopPropagation(); if (e.key === 'Escape') { if (this.root.querySelector('.shr-modal')) this.closeModal(); else this.close(); } if (e.target.id === 'shr-draft' && e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); this.dispatch('queue').catch(e => this.error(e)); } });
         this.root.addEventListener('input', e => {
             if(e.target.matches('.shr-inline-edit textarea'))this.editText=e.target.value;
             if(e.target.id==='shr-group-title')this.groupDraft.title=e.target.value;
@@ -69,7 +72,9 @@ class Shrimp {
         else if (this.tab === 'discover') content = this.renderDiscover();
         else if (this.tab === 'moments' || this.tab === 'news') content = this.renderFeed();
         else content = this.renderMe();
-        this.root.innerHTML = `${n}<div class="shr-content">${content}</div>`;
+        const shell=this.root.querySelector('.shr-content');
+        if(shell && this.root.querySelector('.shr-nav')) { shell.innerHTML=content; this.root.querySelector('.shr-nav').innerHTML=n.slice(n.indexOf('>')+1,n.lastIndexOf('</nav>')); }
+        else this.root.innerHTML = `${n}<div class="shr-content">${content}</div>`;
         this.updateBusyButtons();
         if (this.tab === 'reading') this.readingFilter();
         this.restoreScroll();
@@ -223,7 +228,7 @@ class Shrimp {
         if (this.refreshing || this.gen.busy) throw new Error('鲜虾正在生成，请稍后再发送');
         const sendingConversation=this.conversation();
         this.sending = true; this.updateBusyButtons(); this.status('正在准备回复…');
-        try { return await this.sendNow(); } catch(e) { const c=sendingConversation; for(const m of c?.messages||[])if(m.side==='user'&&(this.retryTarget?m.id===this.retryTarget:m.status==='pending'))m.status='failed';await this.save().catch(()=>{});throw e; } finally { this.sending = false; this.render(); }
+        try { return await this.sendNow(); } finally { this.sending = false; this.render(); }
     }
     async sendNow() {
         const c = this.conversation(); if (!c || this.gen.busy) return;
@@ -238,6 +243,7 @@ class Shrimp {
         const batch = pending.length ? pending.map(m => m.id) : replacement.batchIds;
         const members = c.members.map(id => this.contact(id)).filter(Boolean);
         const conf = {}, mode = 'chat';
+        const capturedIds = new Set(c.messages.map(m=>m.id));
         const generationFingerprint = await digest({ members: c.members, messages: c.messages });
         let history = c.messages.filter(m => !(replacement && m.side === 'ai' && m.turnId === replacement.id));
         history = history.slice(-this.state.settings.historyLimit);
@@ -259,7 +265,7 @@ class Shrimp {
             const raw = await this.gen.call(messages); diagnostics.log('chat.parse', {characters:raw.length}); const reply = parseChatResponse(raw,c.members,mode,context?.key||'*',contextRef);
             for (const m of reply) { if(m.kind==='group_name'&&c.kind!=='group')throw Error('私聊不支持修改群名'); if(m.kind==='style'){const st=styles.find(s=>s.id===m.styleId);if(!st)throw Error('回复引用了不存在的鱼板面文风，未写入');m.attachment={type:'style',title:st.name+'.txt',data:clone(st)};} if (m.publisher) for (const k of ['name','intro','topics','style']) m.publisher[k] = await convertText(m.publisher[k],m.publisher.script); }
             if (context) { if (storyKey() !== context.key) throw new Error('生成期间已切换故事，回复未写入'); const now=await storyContext(this.state.settings); if(now.signature!==context.signature)throw new Error('生成期间正文已变化，请重试'); }
-            if (await digest({ members: c.members, messages: c.messages }) !== generationFingerprint) throw new Error('生成期间会话内容或成员已改变，本次回复未写入，请重新发送');
+            if (await digest({ members: c.members, messages: c.messages.filter(m=>capturedIds.has(m.id)) }) !== generationFingerprint) throw new Error('生成期间会话内容或成员已改变，本次回复未写入，请重新发送');
             applyTurn(c, reply, batch, replacement); for(const m of reply)if(m.kind==='group_name'&&c.kind==='group'){c.title=m.groupName;c.customTitle=true;diagnostics.log('group.renamed',{count:c.members.length+1});} await this.save(); this.render(); this.status('回复完成');
             const key = storyKey(); if (key) for (const type of ['moments', 'news']) if (this.state.settings.feeds[type].withChat) this.requestRefresh(type, key, false);
         } catch (e) { for (const m of pending) m.status = 'failed'; this.render(); await this.save().catch(() => {}); throw e; }

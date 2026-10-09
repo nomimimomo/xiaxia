@@ -1,5 +1,5 @@
-import {uid} from './core.js?v=1.3.2';
-import {diagnostics} from './diagnostics.js?v=1.3.2';
+import {uid} from './core.js?v=1.4';
+import {diagnostics} from './diagnostics.js?v=1.4';
 export const defaultGroupName=(self,members)=>[self,...members].join('、')+`（${members.length+1}）`;
 export function interactionMethods({esc,btn,avatar}) { return {
  updateBusyButtons(){

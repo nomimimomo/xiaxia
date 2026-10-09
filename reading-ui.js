@@ -1,16 +1,17 @@
-import {uid} from './core.js?v=1.3.2';
-import {BrowserLibrary,TavernLibrary,ReadingRepository,bookFromFile,excerptLines,exportExcerpts} from './reading-store.js?v=1.3.2';
-import {ctx} from './bridge.js?v=1.3.2';
+import {uid} from './core.js?v=1.4';
+import {BrowserLibrary,TavernLibrary,ReadingRepository,bookFromFile,excerptLines,exportExcerpts} from './reading-store.js?v=1.4';
+import {diagnostics} from './diagnostics.js?v=1.4';
+import {ctx} from './bridge.js?v=1.4';
 const label=p=>p==='tavern'?'酒馆':'当前浏览器';
 const key=r=>r.place+':'+r.id;
 export function readingMethods({esc,btn,field,check}){return {
- async readingLoad(){
+ async readingLoad(){ diagnostics.log('reading.load.start');
   if(!this.reading){const r=await fetch('/api/users/me',{headers:ctx().getRequestHeaders()});if(!r.ok)throw Error('无法确认酒馆账户，暂不打开书架，避免混用浏览器记录');const user=await r.json();if(!user.handle)throw Error('未取得酒馆账户名称');this.readingScope=user.handle;try{this.readingDefault=localStorage.getItem('shrimp-reading-default:'+user.handle)||'browser';}catch{}this.reading=new ReadingRepository(new BrowserLibrary(user.handle),new TavernLibrary(()=>ctx().getRequestHeaders()));}
-  await this.reading.load();this.readingReady=true;
+  await this.reading.load();this.readingReady=true;diagnostics.log('reading.load.success');
  },
- async readingOpen(){await this.readingLoad();this.tab='reading';this.detail=false;this.readingKind||='book';this.readingSelection=new Set();this.render();},
+ async readingOpen(){if(this.readingOpening)return;this.readingOpening=true;this.tab='reading';this.detail=false;this.groupPanel=false;this.activePublisher='';this.readingKind||='book';this.readingSelection||=new Set();this.render();try{await diagnostics.run('readingOpen',()=>this.readingLoad());}finally{this.readingOpening=false;if(this.tab==='reading')this.render();}},
  renderReading(){
-  if(!this.readingReady)return `<main class="shr-wide">${this.header('读书')}<div class="shr-empty">${btn('rd:open','打开书架')}</div></main>`;
+  if(!this.readingReady)return `<main class="shr-wide">${this.header('读书')}<div class="shr-empty">${this.readingOpening?'正在读取书架…':btn('rd:open','重试读取')}</div></main>`;
   const kind=this.readingKind||'book',rows=this.reading.rows(kind),groups=[...new Set(rows.map(x=>x.group).filter(Boolean))].sort();
   const sorted=rows.sort((a,b)=>this.readingSort==='title'?a.title?.localeCompare(b.title||'','zh')||a.text?.localeCompare(b.text||'','zh')||0:this.readingSort==='import'?b.createdAt-a.createdAt:(b.lastRead||b.createdAt)-(a.lastRead||a.createdAt));
   const selected=this.readingSelection||new Set();

@@ -1,7 +1,7 @@
-import {uid,clone} from './core.js?v=1.3.2';
-import {ctx,storyKey,characterItems} from './bridge.js?v=1.3.2';
-import {activePublishers} from './features.js?v=1.3.2';
-import {currentCharacter,fishboardStyles,fetchModels} from './chat-integration.js?v=1.3.2';
+import {uid,clone} from './core.js?v=1.4';
+import {ctx,storyKey,characterItems} from './bridge.js?v=1.4';
+import {activePublishers} from './features.js?v=1.4';
+import {currentCharacter,fishboardStyles,fetchModels} from './chat-integration.js?v=1.4';
 export function wechatMethods({esc,btn,avatar,time,field}){return {
  syncCurrentCharacter(){
   if(!this.state)return null;const ch=currentCharacter();if(!ch)return null;
@@ -21,7 +21,7 @@ export function wechatMethods({esc,btn,avatar,time,field}){return {
   if(selected)return list+this.renderPublisherChat(selected);
   if(!c)return list+`<main class="shr-chat shr-empty"><p>选择一个聊天</p></main>`;
   const pending=c.messages.filter(m=>m.side==='user'&&['pending','failed'].includes(m.status)).length;
-  return list+`<main class="shr-chat">${this.header(c.title,btn('groupInfo','•••',c.id))}<div class="shr-messages" data-scroll-key="chat:${esc(c.id)}">${c.messages.length>this.pageSize?btn('moreMessages','查看更早消息'):''}${c.messages.slice(-this.pageSize).map(m=>this.renderMessage(m)).join('')}</div><div class="shr-compose"><div>${btn('share','＋','','shr-plus')}<textarea id="shr-draft" rows="2" placeholder="发消息" aria-label="消息输入"></textarea>${btn('send','发送','','shr-primary')}</div></div></main>`;
+  return list+`<main class="shr-chat">${this.header(c.title,btn('groupInfo','•••',c.id))}<div class="shr-messages" data-scroll-key="chat:${esc(c.id)}">${c.messages.length>this.pageSize?btn('moreMessages','查看更早消息'):''}${c.messages.slice(-this.pageSize).map(m=>this.renderMessage(m)).join('')}</div><div class="shr-compose"><div>${btn('share','＋','','shr-plus')}<textarea id="shr-draft" rows="2" placeholder="发消息" aria-label="消息输入"></textarea>${btn('queue','发送','','shr-primary')}${btn('send','接收回复','','shr-receive')}</div></div></main>`;
  },
  renderMessage(m){
   if(m.kind==='group_name')return `<div class="shr-message-time">${esc(this.contact(m.contactId)?.name||'成员')}将群名改为「${esc(m.groupName)}」</div>`;
@@ -43,10 +43,10 @@ export function wechatMethods({esc,btn,avatar,time,field}){return {
  renderFeed(){const bucket=this.state.worlds[storyKey()]?.moments,items=bucket?.items||[];return `<main class="shr-wide shr-moments">${this.header('朋友圈',btn('refresh','刷新','moments'))}<div class="shr-scroll shr-feed" data-scroll-key="moments:${esc(storyKey())}" data-pull-refresh="moments">${items.slice(-this.feedSize).map(i=>{const contact=this.state.contacts.find(c=>c.name===i.author);return `<article class="shr-moment">${avatar(contact||{name:i.author})}<div><b>${esc(i.author)}</b><div class="shr-article">${esc(i.body)}</div><small>${time(i.createdAt)}</small></div></article>`;}).join('')||'<div class="shr-empty">暂无动态</div>'}${bucket?.error?`<p class="error">${esc(bucket.error)}</p>`:''}${items.length>this.feedSize?btn('moreFeed','查看更早动态'):''}<div class="shr-pull-hint">上拉刷新</div></div></main>`;},
  renderDiscover(){return this.renderFeed();},
  share(){this.modal('发送',`<div class="shr-share-grid">${btn('shareCards','▣<span>当前角色名片</span>')}${btn('shareStyles','▤<span>文风文件</span>')}</div>`);},
- async shareCards(){const ch=currentCharacter();if(!ch)throw Error('请先打开一个酒馆角色聊天');const c=this.conversation();if(!c)throw Error('先打开一个聊天');c.messages.push({id:uid(),side:'user',text:ch.name,attachment:{type:'character',title:ch.name,data:clone(ch)},status:'pending',createdAt:Date.now()});c.updatedAt=Date.now();await this.save();this.closeModal();this.render();await this.send();},
+ async shareCards(){const ch=currentCharacter();if(!ch)throw Error('请先打开一个酒馆角色聊天');const c=this.conversation();if(!c)throw Error('先打开一个聊天');c.messages.push({id:uid(),side:'user',text:ch.name,attachment:{type:'character',title:ch.name,data:clone(ch)},status:'pending',createdAt:Date.now()});c.updatedAt=Date.now();await this.save();this.closeModal();this.render();},
  allStyles(){return fishboardStyles();},
  shareStyles(){const rows=this.allStyles();this.modal('鱼板面文风库',rows.map(s=>`<label class="shr-pick"><input name="styles" type="checkbox" value="${esc(s.id)}"><span><b>${esc(s.name)}</b><small>${esc([s.author,s.note].filter(Boolean).join(' · '))}</small></span></label>`).join('')||'<p>鱼板面的文风库暂无可读取的文风。请先在鱼板面中保存文风。</p>',rows.length?btn('attachStyles','发送文件','','shr-primary'):'',rows);},
- async attachStyles(){const rows=this.modalData.filter(s=>this.selected('styles').includes(s.id)),c=this.conversation();if(!rows.length)throw Error('请选择文风');for(const s of rows)c.messages.push({id:uid(),side:'user',text:s.name+'.txt',attachment:{type:'style',title:s.name+'.txt',data:clone(s)},status:'pending',createdAt:Date.now()});c.updatedAt=Date.now();await this.save();this.closeModal();this.render();await this.send();},
+ async attachStyles(){const rows=this.modalData.filter(s=>this.selected('styles').includes(s.id)),c=this.conversation();if(!rows.length)throw Error('请选择文风');for(const s of rows)c.messages.push({id:uid(),side:'user',text:s.name+'.txt',attachment:{type:'style',title:s.name+'.txt',data:clone(s)},status:'pending',createdAt:Date.now()});c.updatedAt=Date.now();await this.save();this.closeModal();this.render();},
  message(id){const m=this.conversation()?.messages.find(m=>m.id===id);if(!m)return;if(m.attachment?.type==='style'){const st=m.attachment.data;this.modal(st.name,`<p class="shr-note">${esc(st.author)}</p><div class="shr-pre">${esc(st.text)}</div>`,btn('downloadStyle','保存 TXT')+btn('editChatMessage','消息管理',id),st);return;}if(m.attachment?.type==='character'){const ch=m.attachment.data;this.modal('个人名片',`<div class="shr-profile">${avatar(ch)}<h2>${esc(ch.name)}</h2></div><div class="shr-pre">${esc(ch.bio||'')}</div>`,btn('editChatMessage','消息管理',id));return;}this.editChatMessage(id);},
  downloadStyle(){const s=this.modalData,url=URL.createObjectURL(new Blob([s.text],{type:'text/plain;charset=utf-8'})),a=document.createElement('a');a.href=url;a.download=s.name+'.txt';a.click();setTimeout(()=>URL.revokeObjectURL(url),10000);},
  async loadModels(){

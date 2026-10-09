@@ -1,5 +1,6 @@
-import { upgradeFeatures } from './features.js?v=1.3.0';
-import { freshState, validateState, uid } from './core.js?v=1.3.0';
+import { instrument } from './diagnostics.js?v=1.3.2';
+import { upgradeFeatures } from './features.js?v=1.3.2';
+import { freshState, validateState, uid } from './core.js?v=1.3.2';
 const PATH = '/user/files/ame-shrimp-v1.json';
 export class Store {
     constructor(ctx, status) { this.ctx = ctx; this.status = status; this.revision = null; this.state = null; this.chain = Promise.resolve(); this.blocked = false; }
@@ -37,3 +38,5 @@ export class Store {
         return this.chain;
     }
 }
+
+instrument(Store.prototype, ['read','load','save'], s => ({blocked:s.blocked,loaded:!!s.state}));

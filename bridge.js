@@ -1,4 +1,5 @@
-import { clone, digest, orderedPrompts, parseJSON } from './core.js?v=1.3.0';
+import { diagnostics, instrument } from './diagnostics.js?v=1.3.2';
+import { clone, digest, orderedPrompts, parseJSON } from './core.js?v=1.3.2';
 export const ctx = () => window.SillyTavern?.getContext?.();
 export function presets() {
     const m = ctx()?.getPresetManager?.('openai');
@@ -24,7 +25,8 @@ export function storyName() { const c = ctx(); return `${c?.name2 || '故事'} �
 export function characterItems() {
     return (ctx()?.characters || []).map((c, i) => ({ id: c.avatar || String(i), name: c.name || c.data?.name || '角色', avatar: c.avatar ? ('/' + (ctx().getThumbnailUrl?.('avatar', c.avatar) || ('thumbnail?type=avatar&file=' + encodeURIComponent(c.avatar))).replace(/^\//, '')) : '', bio: [c.description || c.data?.description, c.personality || c.data?.personality, c.scenario || c.data?.scenario].filter(Boolean).join('\n\n'), data: clone(c.data || c) }));
 }
-export async function storyContext(settings, endIndex = -1) {
+export async function storyContext(settings, endIndex = -1) { return diagnostics.run('storyContext', () => readStoryContext(settings,endIndex)); }
+async function readStoryContext(settings, endIndex = -1) {
     const c = ctx(), key = storyKey(); if (!key) throw new Error('请先打开一个酒馆聊天');
     const last = endIndex < 0 ? (c.chat || []).length - 1 : endIndex;
     if (!Number.isInteger(last) || last < -1 || last >= (c.chat || []).length) throw new Error('所选楼层已不存在，请重新选择');
@@ -32,6 +34,7 @@ export async function storyContext(settings, endIndex = -1) {
     const sources = await Promise.all(all.map(async m => ({ index: m.index, hash: await digest(m.text) })));
     let remain = settings.contextLimit, chosen = [];
     for (const m of [...all].reverse()) { if (remain <= 0) break; const text = m.text.slice(-remain); chosen.unshift({ ...m, text }); remain -= text.length; }
+    diagnostics.log('context.worldInfo');
     const wi = await import('/scripts/world-info.js');
     const character = c.characters?.[c.characterId];
     const groupMembers = c.groupId ? (c.groups?.find(g => g.id == c.groupId)?.members || []).map(id => c.characters.find(ch => ch.avatar === id)).filter(Boolean) : [];
@@ -59,6 +62,7 @@ export async function storyContext(settings, endIndex = -1) {
     if (storyKey() !== key) throw new Error('读取期间已切换故事，请重试');
     const user = c.name1 || 'User';
     const data = { selectedFloor: last, currentMessage: chosen.at(-1) || null, user, userDescription: String(c.powerUserSettings?.persona_description || '').slice(0, settings.worldLimit), character: c.name2, characterDescription: storyCharacters.map(ch => `${ch.name}: ${[ch.description||ch.data?.description,ch.personality||ch.data?.personality,ch.scenario||ch.data?.scenario].filter(Boolean).join('\n')}`).join('\n').slice(0, settings.worldLimit), messages: chosen, lore };
+    diagnostics.log('context.ready', {count:chosen.length,loreCount:lore.length,floor:last});
     return { key, name: storyName(), sources, signature: await digest(data), data };
 }
 export class Generator {
@@ -74,7 +78,9 @@ export class Generator {
                 if (!s.customModel.trim()) throw new Error('请先拉取并选择模型');
                 const controller = new AbortController(), timer = setTimeout(() => controller.abort(), 120000);
                 try {
+                    diagnostics.log('request.dispatched', {mode:'custom',count:messages.length});
                     const r = await fetch(url.href, { method: 'POST', signal: controller.signal, headers: { 'Content-Type': 'application/json', ...(s.customKey ? { Authorization: `Bearer ${s.customKey}` } : {}) }, body: JSON.stringify({ model: s.customModel, messages, max_tokens: s.maxTokens, stream: false }) });
+                    diagnostics.log('request.response', {status:r.status});
                     if (!r.ok) throw new Error(`API 请求失败（${r.status}）`);
                     const x = await r.json(); const content = x.choices?.[0]?.message?.content;
                     if (typeof content !== 'string') throw new Error('API 没有返回文本'); return content;
@@ -86,6 +92,7 @@ export class Generator {
             if (!c?.generateRaw) throw new Error('酒馆版本缺少独立生成接口');
             if (document.querySelector('#send_but')?.classList.contains('disabled') || c.streamingProcessor && !c.streamingProcessor.isFinished && !c.streamingProcessor.isStopped) throw new Error('酒馆正在生成，请稍后再试');
             // Do not select/mutate presets, Prompt switches, or response-length settings.
+            diagnostics.log('request.dispatched', {mode:'tavern',count:messages.length});
             return await c.generateRaw({ prompt: messages, trimNames: false });
         } catch (e) { if (e.name === 'AbortError') throw new Error('请求超时，原记录已保留'); throw e; }
         finally { this.busy = false; }
@@ -101,3 +108,5 @@ export function sourceMessages(state, source, user, char, extraToggles = {}) {
     if (!source) return [];
     return orderedPrompts(source.preset, { ...state.settings.promptToggles[source.id], ...extraToggles }).filter(p => p.enabled && p.content).map(p => ({ role: ['assistant', 'user'].includes(p.role) ? p.role : 'system', content: String(p.content).replace(/\{\{user\}\}/gi, () => user).replace(/\{\{char\}\}/gi, () => char) }));
 }
+
+instrument(Generator.prototype, ['call','identify'], g => ({generatorBusy:g.busy}));

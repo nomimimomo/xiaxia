@@ -1,7 +1,7 @@
-import {uid,clone} from './core.js?v=1.3.0';
-import {ctx,storyKey,characterItems} from './bridge.js?v=1.3.0';
-import {activePublishers} from './features.js?v=1.3.0';
-import {currentCharacter,fishboardStyles,fetchModels} from './chat-integration.js?v=1.3.0';
+import {uid,clone} from './core.js?v=1.3.2';
+import {ctx,storyKey,characterItems} from './bridge.js?v=1.3.2';
+import {activePublishers} from './features.js?v=1.3.2';
+import {currentCharacter,fishboardStyles,fetchModels} from './chat-integration.js?v=1.3.2';
 export function wechatMethods({esc,btn,avatar,time,field}){return {
  syncCurrentCharacter(){
   if(!this.state)return null;const ch=currentCharacter();if(!ch)return null;
@@ -21,16 +21,18 @@ export function wechatMethods({esc,btn,avatar,time,field}){return {
   if(selected)return list+this.renderPublisherChat(selected);
   if(!c)return list+`<main class="shr-chat shr-empty"><p>选择一个聊天</p></main>`;
   const pending=c.messages.filter(m=>m.side==='user'&&['pending','failed'].includes(m.status)).length;
-  return list+`<main class="shr-chat">${this.header(c.title,btn('groupInfo','•••',c.id))}<div class="shr-messages" data-scroll-key="chat:${esc(c.id)}">${c.messages.length>this.pageSize?btn('moreMessages','查看更早消息'):''}${c.messages.slice(-this.pageSize).map(m=>this.renderMessage(m)).join('')}</div><div class="shr-compose"><div>${btn('share','＋','','shr-plus')}<textarea id="shr-draft" rows="2" placeholder="发消息" aria-label="消息输入"></textarea>${btn('send',this.sending?'…':'发送','','shr-primary')}</div>${pending?`<small>${pending} 条待发消息</small>`:''}</div></main>`;
+  return list+`<main class="shr-chat">${this.header(c.title,btn('groupInfo','•••',c.id))}<div class="shr-messages" data-scroll-key="chat:${esc(c.id)}">${c.messages.length>this.pageSize?btn('moreMessages','查看更早消息'):''}${c.messages.slice(-this.pageSize).map(m=>this.renderMessage(m)).join('')}</div><div class="shr-compose"><div>${btn('share','＋','','shr-plus')}<textarea id="shr-draft" rows="2" placeholder="发消息" aria-label="消息输入"></textarea>${btn('send','发送','','shr-primary')}</div></div></main>`;
  },
  renderMessage(m){
+  if(m.kind==='group_name')return `<div class="shr-message-time">${esc(this.contact(m.contactId)?.name||'成员')}将群名改为「${esc(m.groupName)}」</div>`;
   const user=m.side==='user',c=user?this.self():this.contact(m.contactId)||{name:m.legacySender||'联系人'};
   let body;
   if(m.kind==='publisher'&&m.publisher)body=this.renderPublisherMessage(m);
   else if(m.attachment?.type==='style')body=`<button class="shr-file-card" data-action="message" data-id="${esc(m.id)}"><span class="shr-file-icon">TXT</span><span><b>${esc(m.attachment.title)}</b><small>文风 · ${esc(m.attachment.data.author||'鱼板面文风库')}</small></span></button>`;
   else if(m.attachment?.type==='character'){const ch=m.attachment.data;body=`<button class="shr-person-card" data-action="message" data-id="${esc(m.id)}"><div><span class="shr-avatar">${ch.avatar?`<img src="${esc(ch.avatar)}" alt="">`:esc(ch.name?.slice(0,1))}</span><b>${esc(ch.name)}</b></div><small>个人名片</small></button>`;}
   else body=`<button class="shr-bubble" data-action="${m.kind==='option'?'chooseOption':'message'}" data-id="${esc(m.id)}">${m.attachment?`<b>${esc(m.attachment.title)}</b>\n`:''}${esc(m.text)}</button>`;
-  return `<article class="shr-message ${user?'mine':''}">${avatar(c,!user&&c.id?'card':'')}<div>${!user?`<small>${esc(c.name)}</small>`:''}${m.attachment&&m.text!==m.attachment.title?`<p class="shr-file-intro">${esc(m.text)}</p>`:''}${body}${user&&['pending','failed'].includes(m.status)?`<small>${m.status==='failed'?'发送失败':'待发送'}</small>`:''}</div></article>`;
+  if(this.editingMessage===m.id)body=`<div class="shr-inline-edit"><textarea rows="4">${esc(this.editText)}</textarea><div>${btn('cancelInline','取消')}${btn('saveInline','保存')}${btn('resendInline','重发','','shr-primary')}</div></div>`;
+  return `<article class="shr-message ${user?'mine':''}">${avatar(c,!user&&c.id?'card':'')}<div>${!user?`<small>${esc(c.name)}</small>`:''}${m.attachment&&m.text!==m.attachment.title?`<p class="shr-file-intro">${esc(m.text)}</p>`:''}${body}${user&&m.status==='failed'?`<button class="shr-failed" data-action="retryMessage" data-id="${esc(m.id)}" aria-label="发送失败，点击重试">!</button>`:''}</div></article>`;
  },
  renderPublisherChat(id){
   const p=this.state.publishers.find(x=>x.id===id),bucket=this.state.worlds[storyKey()]?.news,items=(bucket?.items||[]).filter(x=>x.publisherId===id);
@@ -41,14 +43,14 @@ export function wechatMethods({esc,btn,avatar,time,field}){return {
  renderFeed(){const bucket=this.state.worlds[storyKey()]?.moments,items=bucket?.items||[];return `<main class="shr-wide shr-moments">${this.header('朋友圈',btn('refresh','刷新','moments'))}<div class="shr-scroll shr-feed" data-scroll-key="moments:${esc(storyKey())}" data-pull-refresh="moments">${items.slice(-this.feedSize).map(i=>{const contact=this.state.contacts.find(c=>c.name===i.author);return `<article class="shr-moment">${avatar(contact||{name:i.author})}<div><b>${esc(i.author)}</b><div class="shr-article">${esc(i.body)}</div><small>${time(i.createdAt)}</small></div></article>`;}).join('')||'<div class="shr-empty">暂无动态</div>'}${bucket?.error?`<p class="error">${esc(bucket.error)}</p>`:''}${items.length>this.feedSize?btn('moreFeed','查看更早动态'):''}<div class="shr-pull-hint">上拉刷新</div></div></main>`;},
  renderDiscover(){return this.renderFeed();},
  share(){this.modal('发送',`<div class="shr-share-grid">${btn('shareCards','▣<span>当前角色名片</span>')}${btn('shareStyles','▤<span>文风文件</span>')}</div>`);},
- async shareCards(){const ch=currentCharacter();if(!ch)throw Error('请先打开一个酒馆角色聊天');const c=this.conversation();if(!c)throw Error('先打开一个聊天');c.messages.push({id:uid(),side:'user',text:ch.name,attachment:{type:'character',title:ch.name,data:clone(ch)},status:'pending',createdAt:Date.now()});c.updatedAt=Date.now();await this.save();this.closeModal();this.render();},
+ async shareCards(){const ch=currentCharacter();if(!ch)throw Error('请先打开一个酒馆角色聊天');const c=this.conversation();if(!c)throw Error('先打开一个聊天');c.messages.push({id:uid(),side:'user',text:ch.name,attachment:{type:'character',title:ch.name,data:clone(ch)},status:'pending',createdAt:Date.now()});c.updatedAt=Date.now();await this.save();this.closeModal();this.render();await this.send();},
  allStyles(){return fishboardStyles();},
  shareStyles(){const rows=this.allStyles();this.modal('鱼板面文风库',rows.map(s=>`<label class="shr-pick"><input name="styles" type="checkbox" value="${esc(s.id)}"><span><b>${esc(s.name)}</b><small>${esc([s.author,s.note].filter(Boolean).join(' · '))}</small></span></label>`).join('')||'<p>鱼板面的文风库暂无可读取的文风。请先在鱼板面中保存文风。</p>',rows.length?btn('attachStyles','发送文件','','shr-primary'):'',rows);},
- async attachStyles(){const rows=this.modalData.filter(s=>this.selected('styles').includes(s.id)),c=this.conversation();if(!rows.length)throw Error('请选择文风');for(const s of rows)c.messages.push({id:uid(),side:'user',text:s.name+'.txt',attachment:{type:'style',title:s.name+'.txt',data:clone(s)},status:'pending',createdAt:Date.now()});c.updatedAt=Date.now();await this.save();this.closeModal();this.render();},
+ async attachStyles(){const rows=this.modalData.filter(s=>this.selected('styles').includes(s.id)),c=this.conversation();if(!rows.length)throw Error('请选择文风');for(const s of rows)c.messages.push({id:uid(),side:'user',text:s.name+'.txt',attachment:{type:'style',title:s.name+'.txt',data:clone(s)},status:'pending',createdAt:Date.now()});c.updatedAt=Date.now();await this.save();this.closeModal();this.render();await this.send();},
  message(id){const m=this.conversation()?.messages.find(m=>m.id===id);if(!m)return;if(m.attachment?.type==='style'){const st=m.attachment.data;this.modal(st.name,`<p class="shr-note">${esc(st.author)}</p><div class="shr-pre">${esc(st.text)}</div>`,btn('downloadStyle','保存 TXT')+btn('editChatMessage','消息管理',id),st);return;}if(m.attachment?.type==='character'){const ch=m.attachment.data;this.modal('个人名片',`<div class="shr-profile">${avatar(ch)}<h2>${esc(ch.name)}</h2></div><div class="shr-pre">${esc(ch.bio||'')}</div>`,btn('editChatMessage','消息管理',id));return;}this.editChatMessage(id);},
  downloadStyle(){const s=this.modalData,url=URL.createObjectURL(new Blob([s.text],{type:'text/plain;charset=utf-8'})),a=document.createElement('a');a.href=url;a.download=s.name+'.txt';a.click();setTimeout(()=>URL.revokeObjectURL(url),10000);},
  async loadModels(){
-  if(this.loadingModels)return;const dialog=this.root.querySelector('.shr-modal'),v=this.values();this.loadingModels=true;const b=dialog.querySelector('[data-action="loadModels"]');if(b){b.disabled=true;b.textContent='正在拉取…';}
+  if(this.loadingModels)return;const dialog=this.root.querySelector('.shr-modal'),v=this.values();this.loadingModels=true;const b=dialog.querySelector('[data-action="loadModels"]');if(b){b.disabled=true;b.innerHTML='<span class="shr-spinner" aria-label="拉取中"></span>';}
   const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),30000);
   try{const models=await fetchModels(v.customUrl,v.customKey,controller.signal);if(!dialog.isConnected)return;const current=this.values();if(current.customUrl!==v.customUrl||current.customKey!==v.customKey)throw Error('地址或密钥已变化，请重新拉取');const select=dialog.querySelector('[name="customModel"]');select.replaceChildren(...models.map(id=>{const opt=document.createElement('option');opt.value=id;opt.textContent=id;return opt;}));if(models.includes(v.customModel))select.value=v.customModel;this.status(`已读取 ${models.length} 个模型`);}catch(e){throw Error(e.name==='AbortError'?'模型列表请求超时，请重试':e.message);}finally{clearTimeout(timer);this.loadingModels=false;if(b){b.disabled=false;b.textContent='拉取模型';}}
  },

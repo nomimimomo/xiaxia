@@ -1,4 +1,4 @@
-import { clone, uid, parseJSON, digest } from './core.js?v=1.3.0';
+import { clone, uid, parseJSON, digest } from './core.js?v=1.3.2';
 export const defaultPublisher = () => ({ id: 'builtin-hk', name: '街巷来信', intro: '用港媒笔触看故事里的世情与人物。', topics: '当地社会、民生、娱乐、人物传闻、街头见闻', style: '香港本地报刊口吻；标题简洁醒目，记者报道笔触，娱乐话题可有圈内消息、传闻及人物反应。措辞贴合故事所处年代。只借鉴口吻，不把其他世界强行设在香港。', script: 'simplified', followed: true, scope: '*', createdAt: Date.now() });
 export const defaultFeatures = () => ({ readStory:true });
 export function upgradeFeatures(state) {
@@ -30,9 +30,10 @@ export function parseChatResponse(raw, members, mode, scope, contextRef, maxOpti
     for (const r of rows) {
         if (!allowed.has(r.contactId)) throw new Error('回复包含非本会话成员，未写入');
         const kind = r.kind || 'text';
-        if (!['text', 'option', 'publisher', 'style'].includes(kind)) throw new Error('消息类型无法识别');
+        if (!['text', 'option', 'publisher', 'style', 'group_name'].includes(kind)) throw new Error('消息类型无法识别');
         if (typeof r.text !== 'string' || (!r.text.trim() && kind !== 'publisher')) throw new Error('回复包含空消息');
         const m = { id: uid(), side: 'ai', contactId: r.contactId, text: r.text.trim(), kind, createdAt: Date.now() };
+        if(kind==='group_name'){if(typeof r.groupName!=='string'||!r.groupName.trim()||r.groupName.length>100)throw Error('群名格式不正确');m.groupName=r.groupName.trim();}
         if (kind === 'option') {
             if (!contextRef) throw new Error('缺少正文来源，选项未写入');
             if (++count > maxOptions) continue;
@@ -66,6 +67,7 @@ export function chatProtocol(mode, conf, members, user) {
 用户让你生成选项、给出下一步建议或修改候选时，直接调用已经提供的预设中对应功能与要求，不额外进入任何模式，不自行指定固定数量或类别。预设的 choice 局部变量也会随资料提供。每个建议用正在聊天的成员本人口吻说出来，kind=option、text 为对用户说的话。若附带可直接填入酒馆输入框的行动或台词，另放 insertText；不要把提议者换成用户角色。讨论继续用 text 即可。
 需要推荐文风时，只能从 fishboardStyleLibrary 的真实条目选择，以 kind=style 和准确 styleId 发出文件消息，text 可写推荐理由；禁止编造库里不存在的文风。
 想推荐故事内的公众号时可返回 kind=publisher 名片，用户点击关注后才订阅，不每轮强推。默认简体中文，港媒口吻不等于繁体。
-最终只返回 JSON {"messages":[{"contactId":"成员ID","kind":"text|option|publisher|style","text":"成员本人的消息","insertText":"选项可选的拟填入内容","styleId":"仅文风文件使用真实库ID","publisher":{"name":"仅公众号名片使用","intro":"简介","topics":"主题","style":"口吻","script":"simplified"}}]}。不使用的字段省略。
+群聊成员可以自然地修改群名：返回 kind=group_name、groupName 为新群名、text 为改名说明。仅群聊可用，私聊不可改名。不要每轮改名。
+最终只返回 JSON {"messages":[{"contactId":"成员ID","kind":"text|option|publisher|style|group_name","text":"成员本人的消息","insertText":"选项可选的拟填入内容","styleId":"仅文风文件使用真实库ID","publisher":{"name":"仅公众号名片使用","intro":"简介","topics":"主题","style":"口吻","script":"simplified"}}]}。不使用的字段省略。
 成员：${JSON.stringify(members.map(m=>({contactId:m.id,name:m.name,bio:m.bio,origin:m.origin,sourceId:m.sourceId})))}`;
 }

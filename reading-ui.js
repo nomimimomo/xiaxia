@@ -1,6 +1,6 @@
-import {uid} from './core.js?v=1.3.0';
-import {BrowserLibrary,TavernLibrary,ReadingRepository,bookFromFile,excerptLines,exportExcerpts} from './reading-store.js?v=1.3.0';
-import {ctx} from './bridge.js?v=1.3.0';
+import {uid} from './core.js?v=1.3.2';
+import {BrowserLibrary,TavernLibrary,ReadingRepository,bookFromFile,excerptLines,exportExcerpts} from './reading-store.js?v=1.3.2';
+import {ctx} from './bridge.js?v=1.3.2';
 const label=p=>p==='tavern'?'酒馆':'当前浏览器';
 const key=r=>r.place+':'+r.id;
 export function readingMethods({esc,btn,field,check}){return {

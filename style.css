@@ -14,3 +14,21 @@
 #shrimp-app{box-sizing:border-box}
 
 #shrimp-app .shr-compose [data-action="send"]{min-width:56px;white-space:nowrap;flex-shrink:0}
+/* 1.3.2 interaction states */
+#shrimp-app{grid-template-rows:minmax(0,1fr)}
+#shrimp-app .shr-spinner{display:inline-block;width:18px;height:18px;border:2px solid currentColor;border-right-color:transparent;border-radius:50%;animation:shr-spin .7s linear infinite;vertical-align:middle}
+@keyframes shr-spin{to{transform:rotate(360deg)}}
+#shrimp-app .shr-message>div{position:relative}
+#shrimp-app .shr-failed{color:white;background:#e34a4a;border-radius:50%;width:22px;height:22px;padding:0;position:absolute;left:-28px;top:10px;font-weight:bold}
+#shrimp-app .shr-inline-edit{width:min(380px,100%);min-width:180px}
+#shrimp-app .shr-inline-edit textarea{width:100%;min-height:100px;line-height:1.7}
+#shrimp-app .shr-inline-edit>div{display:flex;justify-content:flex-end;gap:6px;margin-top:5px}
+#shrimp-app .shr-group-page{display:flex!important}
+#shrimp-app .shr-group-page .shr-scroll{padding:20px}
+#shrimp-app .shr-members{display:grid;grid-template-columns:repeat(auto-fill,minmax(65px,1fr));gap:18px 8px;margin-bottom:24px}
+#shrimp-app .shr-members>button,#shrimp-app .shr-members>div{position:relative;text-align:center;padding:4px;min-width:0}
+#shrimp-app .shr-members .shr-avatar{margin:auto auto 6px}
+#shrimp-app .shr-members small{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#shrimp-app .shr-members .selected{background:#d8efdc}
+#shrimp-app .shr-members b{position:absolute;right:4px;top:0;color:#07984e}
+@media(max-width:700px){#shrimp-app{grid-template-rows:minmax(0,1fr) 58px}#shrimp-app.shr-detail{grid-template-rows:minmax(0,1fr) 0}}

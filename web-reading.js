@@ -1,12 +1,19 @@
-import {uid} from './core.js?v=1.5';
-import {diagnostics} from './diagnostics.js?v=1.5';
+import {uid} from './core.js?v=1.6';
+import {diagnostics} from './diagnostics.js?v=1.6';
 export function webURL(value){const u=new URL(value.trim());if(!['https:','http:'].includes(u.protocol)||u.username||u.password)throw Error('请填写完整的 http / https 网页地址');return u.href;}
 export function webBook(v,old={}){return {...old,id:old.id||uid(),kind:'book',sourceType:'web',title:v.title.trim()||new URL(webURL(v.url)).hostname,url:webURL(v.url),coverUrl:v.coverUrl?.trim()?webURL(v.coverUrl):'',group:v.group?.trim()||'',createdAt:old.createdAt||Date.now()};}
 export function webReadingMethods({esc,btn,field}){return {
- webRender(){const r=this.readingRow(this.webKey);return `<main class="shr-wide shr-web">${this.header(r.title,btn('web:exit','书架'))}<div class="shr-toolbar">${btn('web:site','网页')}${btn('web:paste','粘贴阅读')}${btn('web:excerpt','摘抄')}${btn('web:progress','记进度')}${btn('web:edit','资料')}<a href="${esc(r.chapterUrl||r.url)}" target="_blank" rel="noopener noreferrer">原站打开 ↗</a></div>${this.webText?`<div class="shr-scroll shr-web-text" tabindex="0">${esc(this.webText)}</div>`:`<p class="shr-note">来源：${esc(new URL(r.url).hostname)}。网页不显示或登录失败时，请用“原站打开”。内页跳转后的地址需在“记进度”中粘贴。</p><iframe title="原站阅读" src="${esc(r.chapterUrl||r.url)}" sandbox="allow-scripts allow-forms allow-same-origin allow-popups" referrerpolicy="no-referrer"></iframe>`}<small class="shr-web-foot">${esc(r.chapter||'尚未记录章节')} · 鲜虾记录，不代表平台同步</small></main>`;},
+ webRender(){const r=this.readingRow(this.webKey);return `<main class="shr-wide shr-web">${this.header(r.title,btn('web:exit','书架'))}<div class="shr-toolbar">${btn('web:site','网页')}${btn('web:paste','粘贴阅读')}${btn('web:excerpt','摘抄')}${btn('web:progress','记进度')}${btn('web:edit','资料')}<a href="${esc(r.chapterUrl||r.url)}" target="_blank" rel="noopener noreferrer">原站打开 ↗</a></div>${this.webText?`<div class="shr-scroll shr-web-text" tabindex="0">${esc(this.webText)}</div>`:`<p class="shr-note">来源：${esc(new URL(r.url).hostname)}。账号请在原站登录。网页不显示或登录失败时，请用“原站打开”。内页跳转后的地址需在“记进度”中粘贴。</p><iframe title="原站阅读" src="${esc(r.chapterUrl||r.url)}" sandbox="allow-scripts allow-forms allow-same-origin allow-popups" referrerpolicy="no-referrer"></iframe>`}<small class="shr-web-foot">${esc(r.chapter||'尚未记录章节')} · 鲜虾记录，不代表平台同步</small></main>`;},
  async webAction(a,id){
  diagnostics.log('reading.web',{operation:a});
- if(a==='add'||a==='edit'){const r=a==='edit'?this.readingRow(this.webKey):null;this.modal(r?'网页书籍资料':'添加网页书籍',`${field('title','书名',r?.title||'')}${field('url','书籍网页地址',r?.url||'')}${field('coverUrl','封面图片地址（可留空）',r?.coverUrl||'')}${field('group','分组',r?.group||'')}${r?'':this.readingPlaceField(this.readingDefault||'browser')}<p>只保存封面地址、来源和阅读记录，不下载书籍。夸克里看的第三方网站，请复制实际网页地址。</p>`,btn('web:save','保存'),r);return;}
+ if(a==='platform'){
+  const platforms={jinjiang:{title:'晋江文学城',url:'https://wap.jjwxc.net/'},quark:{title:'夸克网盘',url:'https://pan.quark.cn/'}};
+  const platform=platforms[id];if(!platform)throw Error('未知阅读应用');
+  let row=this.reading.rows('book').find(r=>r.platformId===id);
+  if(!row){row={...webBook(platform),platformId:id,sourceKind:'app'};const place=this.readingDefault||'browser';await this.reading.put(place,row);row={...row,place};}
+  return this.webAction('open',row.place+':'+row.id);
+ }
+ if(a==='add'||a==='edit'){const r=a==='edit'?this.readingRow(this.webKey):null;this.modal(r?'网页书籍资料':'添加网页书籍',`${field('url','粘贴网页地址',r?.url||'')}<details><summary>名称、封面与分组（选填）</summary>${field('title','名称',r?.title||'')}${field('coverUrl','封面图片地址',r?.coverUrl||'')}${field('group','分组',r?.group||'')}</details>${r?'':this.readingPlaceField(this.readingDefault||'browser')}<p>只保存封面地址、来源和阅读记录，不下载书籍。夸克里看的第三方网站，请复制实际网页地址。</p>`,btn('web:save','保存'),r);return;}
  if(a==='save'){const v=this.values(),old=this.modalData,r=webBook(v,old||{});if(new URL(r.url).origin===location.origin)throw Error('请填写阅读平台地址，不能嵌入酒馆自身');if(this.reading.rows('book').some(x=>x.url===r.url&&x.id!==r.id))throw Error('这个网页已经在书架中');await this.reading.put(old?.place||v.place,r);this.closeModal();this.render();return;}
  if(a==='open'){this.webKey=id;this.webText='';this.render();return;}
  if(a==='exit'){this.webKey=null;this.webText='';this.render();return;}

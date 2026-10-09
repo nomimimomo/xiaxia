@@ -13,7 +13,7 @@ export class Diagnostics {
     log(event, data = {}) {
         const safe = {};
         // Strict allowlist intentionally excludes arbitrary exception messages.
-        for (const key of ['id','operation','elapsed','mainBusy','generatorBusy','sending','refreshing','blocked','loaded','count','characters','status','mode','dryRun','errorType','reason','stage','floor','loreCount']) {
+        for (const key of ['id','operation','elapsed','mainBusy','generatorBusy','sending','refreshing','blocked','loaded','count','characters','status','mode','dryRun','errorType','reason','stage','floor','loreCount','sourceCount','cardCount','memberCount']) {
             const v = data[key]; if (typeof v === 'boolean' || typeof v === 'number') safe[key] = v;
             else if (typeof v === 'string') safe[key] = v.replace(/[^a-zA-Z0-9_.:-]/g, '_').slice(0,80);
         }

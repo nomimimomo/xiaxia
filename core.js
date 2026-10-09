@@ -1,4 +1,4 @@
-export const VERSION = '1.5';
+export const VERSION = '1.6';
 export const clone = x => JSON.parse(JSON.stringify(x));
 export function uid() {
     if (globalThis.crypto?.randomUUID) return crypto.randomUUID();
@@ -12,9 +12,9 @@ export async function digest(value) {
     const bytes = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(input));
     return [...new Uint8Array(bytes)].map(x => x.toString(16).padStart(2, '0')).join('');
 }
-export const moduleDefaults = () => ({ auto: false, withChat: false, count: 4, limit: 200, cooldown: 10 });
+export const moduleDefaults = () => ({ auto: false, withChat: false, count: 4, limit: 20, cooldown: 10 });
 export function freshState() {
-    return { schemaVersion: 1, settings: { presetName: '', apiMode: 'tavern', customUrl: '', customKey: '', customModel: '', maxTokens: 3000, historyLimit: 100, contextLimit: 16000, worldLimit: 10000, background: true, promptToggles: {}, feeds: { moments: moduleDefaults(), news: { ...moduleDefaults(), count: 4 } } }, contacts: [], sources: {}, ignored: {}, conversations: [], worlds: {}, styles: [], activeConversation: '', migration: null };
+    return { schemaVersion: 1, settings: { presetName: '', apiMode: 'tavern', customUrl: '', customKey: '', customModel: '', maxTokens: 3000, historyLimit: 200, chatLimit: 200, contextLimit: 16000, worldLimit: 10000, background: true, promptToggles: {}, feeds: { moments: moduleDefaults(), news: { ...moduleDefaults(), count: 4 } } }, contacts: [], sources: {}, ignored: {}, conversations: [], worlds: {}, styles: [], activeConversation: '', migration: null };
 }
 export function validateState(x) {
     if (!x || x.schemaVersion !== 1 || !Array.isArray(x.contacts) || !Array.isArray(x.conversations) || !x.settings || !x.sources || !x.worlds) throw new Error('文件不是鲜虾数据，未覆盖现有记录');

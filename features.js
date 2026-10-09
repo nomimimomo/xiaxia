@@ -1,7 +1,8 @@
-import { clone, uid, parseJSON, digest } from './core.js?v=1.5';
+import { clone, uid, parseJSON, digest } from './core.js?v=1.6';
 export const defaultPublisher = () => ({ id: 'builtin-hk', name: '街巷来信', intro: '用港媒笔触看故事里的世情与人物。', topics: '当地社会、民生、娱乐、人物传闻、街头见闻', style: '香港本地报刊口吻；标题简洁醒目，记者报道笔触，娱乐话题可有圈内消息、传闻及人物反应。措辞贴合故事所处年代。只借鉴口吻，不把其他世界强行设在香港。', script: 'simplified', followed: true, scope: '*', createdAt: Date.now() });
 export const defaultFeatures = () => ({ readStory:true });
 export function upgradeFeatures(state) {
+    if(!state.settings.retentionV16){for(const t of ['moments','news'])if(state.settings.feeds[t].limit===200)state.settings.feeds[t].limit=20;state.settings.chatLimit ||=200;state.settings.retentionV16=true;}
     if (!Array.isArray(state.publishers)) state.publishers=[defaultPublisher()];
     // Old mode controls no longer affect requests; preserve messages and original preset snapshots.
     for(const c of state.conversations)c.features=defaultFeatures();
@@ -41,7 +42,7 @@ export function parseChatResponse(raw, members, mode, scope, contextRef, maxOpti
         }
         if (kind === 'style') { if(typeof r.styleId!=='string')throw Error('文风消息缺少来源');m.styleId=r.styleId; }
         if (kind === 'publisher') m.publisher = sanitizePublisher(r.publisher, scope);
-        output.push(m);
+        if(kind==='text'){for(const text of m.text.split(/\n+|(?<=[。！？!?；;，])\s*/u).map(x=>x.trim()).filter(Boolean))output.push({...m,id:uid(),text});}else output.push(m);
     }
     return output;
 }
@@ -63,7 +64,7 @@ export function compileLocalMacros(messages, initial = {}) {
     return { messages: out, vars };
 }
 export function chatProtocol(mode, conf, members, user) {
- return `你在独立微信聊天中回复 ${user}。这是故事之外的元认知聊天空间，每位成员始终用自己的身份、性格和口吻与用户交谈。只让所列成员发言，不代替用户，不冒充虚构读者或未邀请的人。正文、角色设定、世界资料和启用预设会在后台一并提供。以最新剧情为依据，话题可自由展开。每条消息一个气泡，保持自然说话的节奏；不要把一段分析拆成零碎单字。不要重复状态栏包装标签。
+ return `你在独立微信聊天中回复 ${user}。这是用户视角的微信聊天。预设人格可以处于元认知聊天空间；角色卡人物保留其世界观、知识边界、关系和说话方式，不强行变成点评故事的助手。每位成员用自己的身份、性格和口吻交谈。只让所列成员发言，不代替用户，不冒充虚构读者或未邀请的人。正文、角色设定、世界资料和启用预设会在后台一并提供。以最新剧情为依据，话题可自由展开。一次回复可以包含同一成员的多条消息；每个自然短句单独作为 messages 的一项，呈现连续发微信的节奏，不把整轮回复塞进一个长气泡。参考群聊状态栏的短句分行方式，通常每句不超过15字，必要时保留完整语义；不统一改成客服或分析报告口吻。群聊有两名及以上成员时，开放话题应让至少两位相关成员轮流接话、回应彼此，可以一人连续发几条后另一人接话；不每次只由一个人包办，也不要求每人固定轮流报到。用户明确只问某人时允许该人先回答。讨论正文时直接聊刚发生的具体片段、高光、槽点和后续走向，具体态度遵循各自人设。允许打趣、反驳、追问、突然想起一件事，不把每次聊天做成逐项答题。用户抱怨时不要默认回复通用安慰套话，不反复用“慢慢说，我听着”一类句式收尾。活泼或克制取决于各自人格，禁止把所有成员变成同一口吻。不要重复状态栏包装标签。
 用户让你生成选项、给出下一步建议或修改候选时，直接调用已经提供的预设中对应功能与要求，不额外进入任何模式，不自行指定固定数量或类别。预设的 choice 局部变量也会随资料提供。每个建议用正在聊天的成员本人口吻说出来，kind=option、text 为对用户说的话。若附带可直接填入酒馆输入框的行动或台词，另放 insertText；不要把提议者换成用户角色。讨论继续用 text 即可。
 需要推荐文风时，只能从 fishboardStyleLibrary 的真实条目选择，以 kind=style 和准确 styleId 发出文件消息，text 可写推荐理由；禁止编造库里不存在的文风。
 想推荐故事内的公众号时可返回 kind=publisher 名片，用户点击关注后才订阅，不每轮强推。默认简体中文，港媒口吻不等于繁体。

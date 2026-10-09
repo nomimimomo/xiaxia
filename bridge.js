@@ -1,6 +1,6 @@
-import {compactMessages,safeApiError} from './api-utils.js?v=1.5';
-import { diagnostics, instrument } from './diagnostics.js?v=1.5';
-import { clone, digest, orderedPrompts, parseJSON } from './core.js?v=1.5';
+import {compactMessages,safeApiError} from './api-utils.js?v=1.6';
+import { diagnostics, instrument } from './diagnostics.js?v=1.6';
+import { clone, digest, orderedPrompts, parseJSON } from './core.js?v=1.6';
 export const ctx = () => window.SillyTavern?.getContext?.();
 export function presets() {
     const m = ctx()?.getPresetManager?.('openai');
@@ -24,7 +24,7 @@ export function storyKey() {
 }
 export function storyName() { const c = ctx(); return `${c?.name2 || '故事'} · ${c?.getCurrentChatId?.() || c?.chatId || ''}`; }
 export function characterItems() {
-    return (ctx()?.characters || []).map((c, i) => ({ id: c.avatar || String(i), name: c.name || c.data?.name || '角色', avatar: c.avatar ? ('/' + (ctx().getThumbnailUrl?.('avatar', c.avatar) || ('thumbnail?type=avatar&file=' + encodeURIComponent(c.avatar))).replace(/^\//, '')) : '', bio: [c.description || c.data?.description, c.personality || c.data?.personality, c.scenario || c.data?.scenario].filter(Boolean).join('\n\n'), data: clone(c.data || c) }));
+    return (ctx()?.characters || []).map((c, i) => ({ id: c.avatar || String(i), name: c.name || c.data?.name || '角色', avatar: c.avatar ? ('/' + (ctx().getThumbnailUrl?.('avatar', c.avatar) || ('thumbnail?type=avatar&file=' + encodeURIComponent(c.avatar))).replace(/^\//, '')) : '', bio: [c.description || c.data?.description, c.personality || c.data?.personality, c.scenario || c.data?.scenario].filter(Boolean).join('\n\n'), data: clone({description:c.description||c.data?.description||'',personality:c.personality||c.data?.personality||'',scenario:c.scenario||c.data?.scenario||'',first_mes:c.first_mes||c.data?.first_mes||'',mes_example:c.mes_example||c.data?.mes_example||'',...(c.data||{})}) }));
 }
 export async function storyContext(settings, endIndex = -1) { return diagnostics.run('storyContext', () => readStoryContext(settings,endIndex)); }
 async function readStoryContext(settings, endIndex = -1) {

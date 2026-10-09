@@ -1,14 +1,17 @@
-import { webReadingMethods } from './web-reading.js?v=1.5';
-import { interactionMethods } from './interaction.js?v=1.5';
-import { diagnostics, instrument } from './diagnostics.js?v=1.5';
-import { wechatMethods } from './wechat-ui.js?v=1.5';
-import { readingMethods } from './reading-ui.js?v=1.5';
-import { upgradeFeatures, features, activePublishers, feedSignature, parseChatResponse, parseArticles, compileLocalMacros, chatProtocol } from './features.js?v=1.5';
-import { featureMethods } from './feature-ui.js?v=1.5';
-import { convertText } from './text-script.js?v=1.5';
-import { VERSION, clone, uid, digest, freshState, validateState, parseReply, parseFeed, applyTurn, mergeFeed, worldBucket, sourceStale, migrateLegacy } from './core.js?v=1.5';
-import { Store } from './storage.js?v=1.5';
-import { ctx, presets, snapshot, promptRows, storyKey, storyName, characterItems, storyContext, Generator, sourceMessages } from './bridge.js?v=1.5';
+import {bindPanelLayout} from './layout.js?v=1.6';
+import {resolveMembers,buildChatSetup} from './chat-context.js?v=1.6';
+import {trimConversation} from './retention.js?v=1.6';
+import { webReadingMethods } from './web-reading.js?v=1.6';
+import { interactionMethods } from './interaction.js?v=1.6';
+import { diagnostics, instrument } from './diagnostics.js?v=1.6';
+import { wechatMethods } from './wechat-ui.js?v=1.6';
+import { readingMethods } from './reading-ui.js?v=1.6';
+import { upgradeFeatures, features, activePublishers, feedSignature, parseChatResponse, parseArticles, compileLocalMacros, chatProtocol } from './features.js?v=1.6';
+import { featureMethods } from './feature-ui.js?v=1.6';
+import { convertText } from './text-script.js?v=1.6';
+import { VERSION, clone, uid, digest, freshState, validateState, parseReply, parseFeed, applyTurn, mergeFeed, worldBucket, sourceStale, migrateLegacy } from './core.js?v=1.6';
+import { Store } from './storage.js?v=1.6';
+import { ctx, presets, snapshot, promptRows, storyKey, storyName, characterItems, storyContext, Generator, sourceMessages } from './bridge.js?v=1.6';
 
 const esc = v => String(v ?? '').replace(/[&<>"']/g, x => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[x]));
 const time = t => new Date(t).toLocaleString([], { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' });
@@ -29,7 +32,7 @@ class Shrimp {
     async init() {
         this.launcher = document.createElement('button'); this.launcher.type = 'button'; this.launcher.id = 'shrimp-launcher'; this.launcher.textContent = '🍤'; this.launcher.title = '鲜虾'; this.launcher.onclick = () => this.open(); document.body.append(this.launcher);
         this.root = document.createElement('section'); this.root.id = 'shrimp-app'; this.root.hidden = true; this.root.setAttribute('aria-label', '鲜虾'); document.body.append(this.root);
-        const fit=()=>{const v=window.visualViewport;this.root.style.setProperty('--shr-vh',(v?.height||innerHeight)+'px');this.root.style.setProperty('--shr-vw',(v?.width||innerWidth)+'px');this.root.style.setProperty('--shr-top',(v?.offsetTop||0)+'px');this.root.style.setProperty('--shr-left',(v?.offsetLeft||0)+'px');};fit();window.addEventListener('resize',fit);window.visualViewport?.addEventListener('resize',fit);window.visualViewport?.addEventListener('scroll',fit);
+        this.fitPanel=bindPanelLayout(this.root);
         this.root.addEventListener('click', e => { const b = e.target.closest('[data-action]'); e.stopPropagation(); if (b) { e.preventDefault(); if (!b.disabled) this.dispatch(b.dataset.action, b.dataset.id).catch(e => this.error(e)); } });
         this.root.addEventListener('submit', e => { e.preventDefault(); e.stopPropagation(); });
         window.addEventListener('pagehide', () => diagnostics.log('page.hide', {stage:this.tab}));
@@ -52,7 +55,7 @@ class Shrimp {
         const menu = document.querySelector('#extensionsMenu'); if (!menu || document.querySelector('#shrimp-menu')) return;
         const b = document.createElement('div'); b.id = 'shrimp-menu'; b.className = 'list-group-item flex-container flexGap5'; b.tabIndex = 0; b.textContent = '🍤 鲜虾'; b.onclick = () => this.open(); b.onkeydown = e => { if (e.key === 'Enter') this.open(); }; menu.append(b);
     }
-    async open() { if(this.state)this.syncCurrentCharacter(); this.visible = true; this.root.hidden = false; this.render(); this.installMenu(); this.scheduleScan(1000); }
+    async open() { if(this.state)this.syncCurrentCharacter(); this.visible = true; this.root.hidden = false; this.render(); this.fitPanel(); this.installMenu(); this.scheduleScan(1000); }
     close() { this.webText = ''; this.webKey = null; this.root.querySelector('.shr-web')?.remove(); this.visible = false; this.root.hidden = true; }
     error(e) { diagnostics.log('ui.error', {errorType:e?.name || 'Error', ...this.diagnosticState()}); console.warn('[鲜虾]', e.message); this.status(e.message, true); window.toastr?.error(e.message, '鲜虾'); }
     conversation() { return this.state?.conversations.find(x => x.id === this.state.activeConversation); }
@@ -245,17 +248,18 @@ class Shrimp {
         const replacement = this.retryTarget ? c.turns.find(t=>t.batchIds.includes(this.retryTarget)) : pending.length ? null : c.turns.at(-1);
         if (!pending.length && !replacement) throw new Error('先输入消息，再点击 ↑');
         const batch = pending.length ? pending.map(m => m.id) : replacement.batchIds;
-        const members = c.members.map(id => this.contact(id)).filter(Boolean);
+        const members = resolveMembers(c.members.map(id => this.contact(id)).filter(Boolean));
+        if(members.length!==c.members.length)throw Error('会话成员资料缺失，请重新选择成员');
         const conf = {}, mode = 'chat';
         const capturedIds = new Set(c.messages.map(m=>m.id));
         const generationFingerprint = await digest({ members: c.members, messages: c.messages });
         let history = c.messages.filter(m => !(replacement && m.side === 'ai' && m.turnId === replacement.id));
         history = history.slice(-this.state.settings.historyLimit);
-        const sources = [...new Set(members.map(m => m.sourceId).filter(Boolean))].map(id => this.state.sources[id]).filter(Boolean);
-        if (!sources.length) sources.push(await this.activeSource());
+        const fallback=members.some(m=>!m.sourceId)?await this.activeSource():null;
         const context = storyKey() ? await storyContext(this.state.settings) : null;
         const contextRef = context ? { key:context.key, floor:context.data.selectedFloor, signature:context.signature, latest:true } : null;
-        const compiled = compileLocalMacros(sources.flatMap(s => sourceMessages(this.state,s,ctx().name1||'User',ctx().name2||'Char')));
+        const compiled = buildChatSetup(this.state,members,fallback,ctx().name1||'User',ctx().name2||'Char');
+        diagnostics.log('chat.context',{count:compiled.promptCount,sourceCount:compiled.sourceCount,cardCount:compiled.cardCount,memberCount:members.length});
         let styles=[];
         try{styles=this.allStyles();}catch(e){this.status('文风库读取失败：'+e.message,true);}
         const messages = compiled.messages;
@@ -270,7 +274,7 @@ class Shrimp {
             for (const m of reply) { if(m.kind==='group_name'&&c.kind!=='group')throw Error('私聊不支持修改群名'); if(m.kind==='style'){const st=styles.find(s=>s.id===m.styleId);if(!st)throw Error('回复引用了不存在的鱼板面文风，未写入');m.attachment={type:'style',title:st.name+'.txt',data:clone(st)};} if (m.publisher) for (const k of ['name','intro','topics','style']) m.publisher[k] = await convertText(m.publisher[k],m.publisher.script); }
             if (context) { if (storyKey() !== context.key) throw new Error('生成期间已切换故事，回复未写入'); const now=await storyContext(this.state.settings); if(now.signature!==context.signature)throw new Error('生成期间正文已变化，请重试'); }
             if (await digest({ members: c.members, messages: c.messages.filter(m=>capturedIds.has(m.id)) }) !== generationFingerprint) throw new Error('生成期间会话内容或成员已改变，本次回复未写入，请重新发送');
-            applyTurn(c, reply, batch, replacement); for(const m of reply)if(m.kind==='group_name'&&c.kind==='group'){c.title=m.groupName;c.customTitle=true;diagnostics.log('group.renamed',{count:c.members.length+1});} await this.save(); this.render(); this.status('回复完成');
+            applyTurn(c, reply, batch, replacement); const removed=trimConversation(c,this.state.settings.chatLimit);diagnostics.log('chat.retention',{count:removed});diagnostics.log('chat.reply',{count:reply.length,memberCount:new Set(reply.map(m=>m.contactId)).size}); for(const m of reply)if(m.kind==='group_name'&&c.kind==='group'){c.title=m.groupName;c.customTitle=true;diagnostics.log('group.renamed',{count:c.members.length+1});} await this.save(); this.render(); this.status('回复完成');
             const key = storyKey(); if (key) for (const type of ['moments', 'news']) if (this.state.settings.feeds[type].withChat) this.requestRefresh(type, key, false);
         } catch (e) { for (const m of pending) m.status = 'failed'; this.render(); await this.save().catch(() => {}); throw e; }
     }
@@ -288,10 +292,10 @@ class Shrimp {
     settings() {
         const s = this.state.settings; let list = []; let current = '';
         try { ({ names: list, current } = presets()); } catch {}
-        this.modal('预设与 API', `<label class="shr-field">鲜虾使用的预设<select name="presetName"><option value="">跟随当前酒馆预设（${esc(current)}）</option>${list.map(n => `<option value="${esc(n)}" ${s.presetName === n ? 'selected' : ''}>${esc(n)}</option>`).join('')}</select></label><p class="shr-note">用于新联系人识别和无预设来源的会话。已有联系人继续使用名片中的版本。保存选择后可查看 Prompt。</p>${btn('prompts', '所选预设的独立 Prompt 开关')}<label class="shr-field">API<select name="apiMode"><option value="tavern" ${s.apiMode === 'tavern' ? 'selected' : ''}>跟随酒馆</option><option value="custom" ${s.apiMode === 'custom' ? 'selected' : ''}>自定义 OpenAI-compatible</option></select></label>${field('customUrl', '自定义地址（填写到 /v1 或 /chat/completions）', s.customUrl)}${field('customKey', 'API Key', s.customKey, 'password', 'autocomplete="off"')}<label class="shr-field">模型<select name="customModel">${s.customModel?`<option value="${esc(s.customModel)}">${esc(s.customModel)}</option>`:'<option value="">先拉取模型列表</option>'}</select></label>${btn('loadModels','拉取模型')}${field('maxTokens', '自定义 API 输出上限', s.maxTokens, 'number', 'min="256" max="32000"')}${field('historyLimit', '发送给模型的历史消息数', s.historyLimit, 'number', 'min="1" max="500"')}${field('contextLimit', '正文与历史上限（字符）', s.contextLimit, 'number', 'min="1000" max="100000"')}${field('worldLimit', '世界资料上限（字符）', s.worldLimit, 'number', 'min="0" max="100000"')}<p class="shr-note">跟随酒馆时沿用其 API、模型和生成参数，不切换主预设。自定义请求由浏览器发出，服务需支持 CORS。Key 保存到当前酒馆账户，导出默认不包含。支持用户、角色名称及简单局部变量宏；复杂脚本宏请改成明确文本后使用。</p>`, btn('saveSettings', '保存', '', 'shr-primary'));
+        this.modal('预设与 API', `<label class="shr-field">鲜虾使用的预设<select name="presetName"><option value="">跟随当前酒馆预设（${esc(current)}）</option>${list.map(n => `<option value="${esc(n)}" ${s.presetName === n ? 'selected' : ''}>${esc(n)}</option>`).join('')}</select></label><p class="shr-note">用于新联系人识别和无预设来源的会话。已有联系人继续使用名片中的版本。保存选择后可查看 Prompt。</p>${btn('prompts', '所选预设的独立 Prompt 开关')}<label class="shr-field">API<select name="apiMode"><option value="tavern" ${s.apiMode === 'tavern' ? 'selected' : ''}>跟随酒馆</option><option value="custom" ${s.apiMode === 'custom' ? 'selected' : ''}>自定义 OpenAI-compatible</option></select></label>${field('customUrl', '自定义地址（填写到 /v1 或 /chat/completions）', s.customUrl)}${field('customKey', 'API Key', s.customKey, 'password', 'autocomplete="off"')}<label class="shr-field">模型<select name="customModel">${s.customModel?`<option value="${esc(s.customModel)}">${esc(s.customModel)}</option>`:'<option value="">先拉取模型列表</option>'}</select></label>${btn('loadModels','拉取模型')}${field('maxTokens', '自定义 API 输出上限', s.maxTokens, 'number', 'min="256" max="32000"')}${field('chatLimit','每个聊天保留的气泡数',s.chatLimit,'number','min="20" max="5000"')}${field('historyLimit', '发送给模型的历史消息数', s.historyLimit, 'number', 'min="1" max="500"')}${field('contextLimit', '正文与历史上限（字符）', s.contextLimit, 'number', 'min="1000" max="100000"')}${field('worldLimit', '世界资料上限（字符）', s.worldLimit, 'number', 'min="0" max="100000"')}<p class="shr-note">跟随酒馆时沿用其 API、模型和生成参数，不切换主预设。自定义请求由浏览器发出，服务需支持 CORS。Key 保存到当前酒馆账户，导出默认不包含。支持用户、角色名称及简单局部变量宏；复杂脚本宏请改成明确文本后使用。</p>`, btn('saveSettings', '保存', '', 'shr-primary'));
     }
     async saveSettings() {
-        const v = this.values(); for (const k of ['maxTokens', 'historyLimit', 'contextLimit', 'worldLimit']) v[k] = numberIn(v[k], k === 'historyLimit' ? 1 : k === 'worldLimit' ? 0 : k === 'maxTokens' ? 256 : 1000, k === 'historyLimit' ? 500 : k === 'maxTokens' ? 32000 : 100000);
+        const v = this.values(); v.chatLimit=numberIn(v.chatLimit,20,5000); for (const k of ['maxTokens', 'historyLimit', 'contextLimit', 'worldLimit']) v[k] = numberIn(v[k], k === 'historyLimit' ? 1 : k === 'worldLimit' ? 0 : k === 'maxTokens' ? 256 : 1000, k === 'historyLimit' ? 500 : k === 'maxTokens' ? 32000 : 100000);
         Object.assign(this.state.settings, v); await this.save(); this.closeModal(); this.render();
     }
     async prompts(id) {
@@ -383,7 +387,7 @@ class Shrimp {
         if (this.refreshing || this.sending) { if (manual) throw new Error('正在处理另一个任务，请稍后刷新'); this.requestRefresh(type, storyKey(), false); return; }
         this.refreshing = true; this.updateBusyButtons(); this.status("正在刷新…");
         const buttons=[...this.root.querySelectorAll('[data-action=refresh]')];for(const b of buttons){b.disabled=true;b.innerHTML='<span class="shr-spinner" aria-label="刷新中"></span>';}
-        try { return await this.refreshNow(type, manual); } finally { this.refreshing = false; this.updateBusyButtons(); for(const b of this.root.querySelectorAll('[data-action=refresh]')){b.disabled=false;b.textContent='刷新';} }
+        try { return await this.refreshNow(type, manual); } finally { this.refreshing = false; this.updateBusyButtons(); for(const b of this.root.querySelectorAll('[data-action=refresh]')){b.disabled=false;b.textContent=b.classList.contains('shr-pull-hint')?'上拉刷新 · 也可点此刷新':'刷新';} }
     }
     async refreshNow(type, manual = false) {
         await this.checkMainBusy();

@@ -1,54 +1,10 @@
-import { clone, uid } from './core.js?v=1.2.0';
-import { features, publisherKey, followPublisher, sanitizePublisher, activePublishers } from './features.js?v=1.2.0';
-import { ctx, storyKey, storyName, storyContext, promptRows } from './bridge.js?v=1.2.0';
-import { convertText } from './text-script.js?v=1.2.0';
+import { clone, uid } from './core.js?v=1.3.0';
+import { features, publisherKey, followPublisher, sanitizePublisher, activePublishers } from './features.js?v=1.3.0';
+import { ctx, storyKey, storyName, storyContext, promptRows } from './bridge.js?v=1.3.0';
+import { convertText } from './text-script.js?v=1.3.0';
 
 export function featureMethods({ esc, btn, field, check }) {
     return {
-        featureBar(c) {
-            const f = features(c), modeName = { chat: '日常聊天', theatre: '小剧场', choices: '选项模式' }[f.mode] || '日常聊天';
-            return `<div class="shr-mode-bar"><span>${modeName}${f.mode === 'choices' ? ' · 点候选填入酒馆' : ''}</span>${btn('chatFeatures', '设置')}${f.mode === 'choices' ? btn('generateChoices', '生成选项', '', 'shr-primary') + btn('leaveChoices', '退出选项') : btn('enterChoices', '选项模式')}</div>`;
-        },
-        async chatFeatures() {
-            const c = this.conversation(); if (!c) return;
-            const f = features(c), sources = [...new Set(c.members.map(id => this.contact(id)?.sourceId).filter(Boolean))].map(id => this.state.sources[id]);
-            if (!sources.length) { try { sources.push(await this.activeSource()); } catch {} }
-            const rows = sources.flatMap(s => promptRows(this.state, s).filter(p => p.linked && !p.marker).map(p => ({ source: s, prompt: p })));
-            const current = ctx(), floors = (current.chat || []).map((m, i) => `<option value="${i}" ${f.floor === i ? 'selected' : ''}>第 ${i + 1} 楼 · ${esc(m.name || '')} · ${esc(String(m.mes || '').slice(0, 26))}</option>`).reverse().join('');
-            this.modal('聊天功能', `<label class="shr-field">模式<select name="mode">${[['chat','日常聊天'],['theatre','小剧场：陪你聊正文'],['choices','选项模式：讨论后选一句填入酒馆']].map(([k,v]) => `<option value="${k}" ${f.mode === k ? 'selected' : ''}>${v}</option>`).join('')}</select></label>${check('readStory','日常聊天也读取当前正文及历史',f.readStory)}<label class="shr-field">读取到哪一楼<select name="floor"><option value="-1" ${f.floor < 0 ? 'selected' : ''}>当前最新楼层（随剧情更新）</option>${floors}</select></label><p class="shr-note">小剧场、选项模式始终读取所选楼层及其前文；读取范围受上下文上限控制。</p><h3>候选回复</h3><label class="shr-field">用谁的口吻行动 / 说话<select name="voice">${[['user',`User · ${current.name1 || '我'}（绿色气泡）`],['char',`当前角色 · ${current.name2 || 'Char'}`],...c.members.map(id=>[`contact:${id}`,this.contact(id)?.name || '联系人']),['custom','自定义人物']].map(([k,v])=>`<option value="${esc(k)}" ${f.voice === k ? 'selected' : ''}>${esc(v)}</option>`).join('')}</select></label>${field('customVoice','自定义人物与口吻说明',f.customVoice)}${field('count','默认候选数量',f.count,'number','min="1" max="20"')}<label class="shr-field">分类顺序（每行一个，可修改）<textarea name="types" rows="6">${esc(f.types.join('\n'))}</textarea></label><label class="shr-field">附加要求<textarea name="extra" rows="3">${esc(f.extra)}</textarea></label><details><summary>进入选项模式时启用哪些预设条目</summary><p class="shr-note">仅影响本会话的选项模式，退出后恢复日常开关，不改酒馆原预设。</p>${rows.map((r,i) => `<label class="shr-pick"><input type="checkbox" name="featurePrompt${i}" ${Object.hasOwn(f.promptToggles[r.source.id] || {},r.prompt.identifier) ? f.promptToggles[r.source.id][r.prompt.identifier] ? 'checked' : '' : r.prompt.enabled ? 'checked' : ''}><span>${esc(r.prompt.name || r.prompt.identifier)}<small>${esc(r.source.name)} · ${r.source.version}</small></span></label>`).join('')}</details>`,btn('saveChatFeatures','保存','','shr-primary'),{ conversation:c, rows, key:storyKey() });
-        },
-        async saveChatFeatures() {
-            if (this.sending || this.gen.busy) throw new Error('请等这轮回复完成后再切换模式');
-            const d = this.modalData, v = this.values(), count = Number(v.count), floor = Number(v.floor);
-            if (!Number.isInteger(count) || count < 1 || count > 20) throw new Error('候选数量需为 1–20');
-            if (d.key !== storyKey()) throw new Error('故事已切换，请重新打开聊天功能设置');
-            if (v.voice === 'custom' && !v.customVoice.trim()) throw new Error('请填写自定义人物');
-            const toggles = {};
-            d.rows.forEach((r,i) => { (toggles[r.source.id] ||= {})[r.prompt.identifier] = !!v['featurePrompt'+i]; });
-            d.conversation.features = { mode:v.mode, readStory:!!v.readStory, floor, floorKey:d.key, voice:v.voice, customVoice:v.customVoice, count, types:v.types.split('\n').map(x=>x.trim()).filter(Boolean), extra:v.extra, promptToggles:toggles };
-            await this.save(); this.closeModal(); this.render();
-        },
-        async changeChoiceMode(enabled) {
-            if (this.sending || this.gen.busy) throw new Error('请等这轮回复完成后再切换模式');
-            const c = this.conversation(); if (!c) return;
-            const f = features(c); if (enabled) { f.previousMode = f.mode === 'choices' ? f.previousMode || 'chat' : f.mode; f.mode = 'choices'; } else f.mode = f.previousMode || 'chat';
-            await this.save(); this.render();
-        },
-        async generateChoices() {
-            if (this.sending || this.gen.busy) return;
-            const c = this.conversation(); if (!c) return;
-            if (!storyKey()) throw new Error('请先打开要继续的酒馆聊天');
-            const f = features(c); f.mode = 'choices';
-            if (c.draft?.trim()) await this.queue();
-            c.messages.push({ id:uid(), side:'user', text:'请根据当前指定楼层和历史记录，按我的选项设置生成下一步候选。', status:'pending', createdAt:Date.now() });
-            await this.save(); this.render(); return this.send();
-        },
-        voiceFor(c) {
-            const f = features(c);
-            if (f.voice === 'char') return ctx().name2 || '当前角色';
-            if (f.voice.startsWith('contact:')) return this.contact(f.voice.slice(8))?.name || '指定联系人';
-            return f.voice === 'custom' ? f.customVoice : `${ctx().name1 || 'User'}（用户角色）`;
-        },
         async chooseOption(id) {
             const c = this.conversation(), m = c?.messages.find(x => x.id === id);
             if (m?.kind !== 'option' || !m.contextRef) return;
@@ -60,10 +16,10 @@ export function featureMethods({ esc, btn, field, check }) {
             const input = document.querySelector('#send_textarea');
             if (!input || input.disabled) throw new Error('未找到可用的酒馆聊天输入框');
             if (input.value.trim()) {
-                this.modal('酒馆输入框已有文字',`<p>请选择如何放入候选，取消会保留原输入。</p><div class="shr-pre">${esc(m.text)}</div>`,btn('dismiss','取消')+btn('injectReplace','替换现有输入')+btn('injectAppend','追加到末尾','','shr-primary'),{ text:m.text, key:storyKey(), original:input.value });
+                this.modal('酒馆输入框已有文字',`<p>请选择如何放入候选，取消会保留原输入。</p><div class="shr-pre">${esc(m.insertText||m.text)}</div>`,btn('dismiss','取消')+btn('injectReplace','替换现有输入')+btn('injectAppend','追加到末尾','','shr-primary'),{ text:m.insertText||m.text, key:storyKey(), original:input.value });
                 return;
             }
-            this.injectOption(m.text, storyKey(), input.value, false);
+            this.injectOption(m.insertText||m.text, storyKey(), input.value, false);
         },
         injectOption(text,key,original,append) {
             if (storyKey() !== key) throw new Error('已切换酒馆聊天，未填入');
@@ -89,7 +45,7 @@ export function featureMethods({ esc, btn, field, check }) {
             if(this.sending || this.gen.busy)throw new Error('请等当前生成结束后再关注');
             const m=this.conversation()?.messages.find(x=>x.id===id); if(!m?.publisher)return;
             const already=this.state.publishers.find(x=>publisherKey(x)===publisherKey(m.publisher))?.followed;
-            const p=followPublisher(this.state,m.publisher);await this.save();this.closeModal();if(already){this.tab='news';this.detail=false;this.newsFilter=p.id;}this.render();this.status(`已关注「${p.name}」`);
+            const p=followPublisher(this.state,m.publisher);await this.save();this.closeModal();if(already){this.tab='chats';this.detail=true;this.activePublisher=p.id;}this.render();this.status(`已关注「${p.name}」`);
         },
         publishers() {
             const key=storyKey(), list=this.state.publishers.filter(p=>p.scope==='*'||p.scope===key);

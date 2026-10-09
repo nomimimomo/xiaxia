@@ -1,4 +1,4 @@
-import { clone, digest, orderedPrompts, parseJSON } from './core.js?v=1.2.0';
+import { clone, digest, orderedPrompts, parseJSON } from './core.js?v=1.3.0';
 export const ctx = () => window.SillyTavern?.getContext?.();
 export function presets() {
     const m = ctx()?.getPresetManager?.('openai');
@@ -22,12 +22,12 @@ export function storyKey() {
 }
 export function storyName() { const c = ctx(); return `${c?.name2 || '故事'} · ${c?.getCurrentChatId?.() || c?.chatId || ''}`; }
 export function characterItems() {
-    return (ctx()?.characters || []).map((c, i) => ({ id: c.avatar || String(i), name: c.name || c.data?.name || '角色', avatar: c.avatar ? ctx().getThumbnailUrl('avatar', c.avatar) : '', bio: [c.description || c.data?.description, c.personality || c.data?.personality, c.scenario || c.data?.scenario].filter(Boolean).join('\n\n'), data: clone(c.data || c) }));
+    return (ctx()?.characters || []).map((c, i) => ({ id: c.avatar || String(i), name: c.name || c.data?.name || '角色', avatar: c.avatar ? ('/' + (ctx().getThumbnailUrl?.('avatar', c.avatar) || ('thumbnail?type=avatar&file=' + encodeURIComponent(c.avatar))).replace(/^\//, '')) : '', bio: [c.description || c.data?.description, c.personality || c.data?.personality, c.scenario || c.data?.scenario].filter(Boolean).join('\n\n'), data: clone(c.data || c) }));
 }
 export async function storyContext(settings, endIndex = -1) {
     const c = ctx(), key = storyKey(); if (!key) throw new Error('请先打开一个酒馆聊天');
     const last = endIndex < 0 ? (c.chat || []).length - 1 : endIndex;
-    if (!Number.isInteger(last) || last < 0 || last >= (c.chat || []).length) throw new Error('所选楼层已不存在，请重新选择');
+    if (!Number.isInteger(last) || last < -1 || last >= (c.chat || []).length) throw new Error('所选楼层已不存在，请重新选择');
     const all = (c.chat || []).slice(0, last + 1).map((m, index) => ({ index, name: m.name, user: !!m.is_user, text: String(m.mes || '') })).filter(m => m.text);
     const sources = await Promise.all(all.map(async m => ({ index: m.index, hash: await digest(m.text) })));
     let remain = settings.contextLimit, chosen = [];
@@ -58,7 +58,7 @@ export async function storyContext(settings, endIndex = -1) {
     }
     if (storyKey() !== key) throw new Error('读取期间已切换故事，请重试');
     const user = c.name1 || 'User';
-    const data = { selectedFloor: last, currentMessage: chosen.at(-1) || null, user, userDescription: String(c.powerUserSettings?.persona_description || '').slice(0, settings.worldLimit), character: c.name2, characterDescription: storyCharacters.map(ch => `${ch.name}: ${ch.description || ch.data?.description || ''}`).join('\n').slice(0, settings.worldLimit), messages: chosen, lore };
+    const data = { selectedFloor: last, currentMessage: chosen.at(-1) || null, user, userDescription: String(c.powerUserSettings?.persona_description || '').slice(0, settings.worldLimit), character: c.name2, characterDescription: storyCharacters.map(ch => `${ch.name}: ${[ch.description||ch.data?.description,ch.personality||ch.data?.personality,ch.scenario||ch.data?.scenario].filter(Boolean).join('\n')}`).join('\n').slice(0, settings.worldLimit), messages: chosen, lore };
     return { key, name: storyName(), sources, signature: await digest(data), data };
 }
 export class Generator {
@@ -70,8 +70,8 @@ export class Generator {
             if (s.apiMode === 'custom') {
                 let url; try { url = new URL(s.customUrl.trim()); } catch { throw new Error('请填写完整 API 地址'); }
                 if (!['https:', 'http:'].includes(url.protocol) || url.username || url.password) throw new Error('API 地址格式不支持');
-                url.pathname = url.pathname.replace(/\/+$/, '').replace(/\/chat\/completions$/, '') + '/chat/completions';
-                if (!s.customModel.trim()) throw new Error('请填写模型名称');
+                url.pathname = url.pathname.replace(/\/+$/, '').replace(/\/(?:chat\/completions|models)$/, '') + '/chat/completions';
+                if (!s.customModel.trim()) throw new Error('请先拉取并选择模型');
                 const controller = new AbortController(), timer = setTimeout(() => controller.abort(), 120000);
                 try {
                     const r = await fetch(url.href, { method: 'POST', signal: controller.signal, headers: { 'Content-Type': 'application/json', ...(s.customKey ? { Authorization: `Bearer ${s.customKey}` } : {}) }, body: JSON.stringify({ model: s.customModel, messages, max_tokens: s.maxTokens, stream: false }) });

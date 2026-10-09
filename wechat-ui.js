@@ -1,0 +1,62 @@
+import {uid,clone} from './core.js?v=1.3.0';
+import {ctx,storyKey,characterItems} from './bridge.js?v=1.3.0';
+import {activePublishers} from './features.js?v=1.3.0';
+import {currentCharacter,fishboardStyles,fetchModels} from './chat-integration.js?v=1.3.0';
+export function wechatMethods({esc,btn,avatar,time,field}){return {
+ syncCurrentCharacter(){
+  if(!this.state)return null;const ch=currentCharacter();if(!ch)return null;
+  let found=this.state.contacts.find(c=>c.kind==='character'&&c.characterId===ch.id);
+  if(!found){found={id:uid(),kind:'character',sourceId:'',characterId:ch.id};this.state.contacts.unshift(found);}
+  Object.assign(found,{name:ch.name,avatar:ch.avatar,bio:ch.bio,data:ch.data,origin:'当前聊天角色'});
+  this.currentCharacterId=found.id;return found;
+ },
+ sortedContacts(){const current=this.syncCurrentCharacter();return [...this.state.contacts].sort((a,b)=>Number(b.id===current?.id)-Number(a.id===current?.id));},
+ renderChats(){
+  const c=this.conversation(),world=this.state.worlds[storyKey()],articles=world?.news?.items||[];
+  const pubs=this.state.publishers.filter(p=>(p.scope==='*'||p.scope===storyKey())&&(p.followed||articles.some(a=>a.publisherId===p.id)));
+  if(this.activePublisher&&!pubs.some(p=>p.id===this.activePublisher))this.activePublisher='';
+  const selected=this.activePublisher;
+  const rows=[...this.state.conversations.map(x=>({id:x.id,title:x.title,time:x.updatedAt||0,preview:x.messages.at(-1)?.text||'开始聊天',person:x.kind==='private'?this.contact(x.members[0]):{name:'群聊'},action:'conversation',selected:!selected&&x.id===c?.id})),...pubs.map(p=>{const last=articles.filter(a=>a.publisherId===p.id).at(-1);return {id:p.id,title:p.name,time:last?.createdAt||p.createdAt||0,preview:last?.title||'公众号',person:{name:p.name},action:'publisherChat',selected:selected===p.id,publisher:true};})].sort((a,b)=>b.time-a.time);
+  const list=`<aside class="shr-list">${this.header('微信',btn('group','＋'))}<input id="shr-search" placeholder="搜索" aria-label="搜索会话"><div class="shr-list-body">${rows.map(x=>`<button class="shr-row ${x.selected?'selected':''}" data-search="${esc(x.title)}" data-action="${x.action}" data-id="${esc(x.id)}"><span class="shr-tile ${x.publisher?'shr-pub-tile':''}">${x.person?.avatar?`<img src="${esc(x.person.avatar)}" alt="">`:esc(x.publisher?'▤':x.person?.name?.slice(0,1)||'群')}</span><span><b>${esc(x.title)}</b><small>${esc(x.preview.slice(0,55))}</small></span></button>`).join('')||'<div class="shr-empty">从通讯录开始聊天</div>'}</div></aside>`;
+  if(selected)return list+this.renderPublisherChat(selected);
+  if(!c)return list+`<main class="shr-chat shr-empty"><p>选择一个聊天</p></main>`;
+  const pending=c.messages.filter(m=>m.side==='user'&&['pending','failed'].includes(m.status)).length;
+  return list+`<main class="shr-chat">${this.header(c.title,btn('groupInfo','•••',c.id))}<div class="shr-messages" data-scroll-key="chat:${esc(c.id)}">${c.messages.length>this.pageSize?btn('moreMessages','查看更早消息'):''}${c.messages.slice(-this.pageSize).map(m=>this.renderMessage(m)).join('')}</div><div class="shr-compose"><div>${btn('share','＋','','shr-plus')}<textarea id="shr-draft" rows="2" placeholder="发消息" aria-label="消息输入"></textarea>${btn('send',this.sending?'…':'发送','','shr-primary')}</div>${pending?`<small>${pending} 条待发消息</small>`:''}</div></main>`;
+ },
+ renderMessage(m){
+  const user=m.side==='user',c=user?this.self():this.contact(m.contactId)||{name:m.legacySender||'联系人'};
+  let body;
+  if(m.kind==='publisher'&&m.publisher)body=this.renderPublisherMessage(m);
+  else if(m.attachment?.type==='style')body=`<button class="shr-file-card" data-action="message" data-id="${esc(m.id)}"><span class="shr-file-icon">TXT</span><span><b>${esc(m.attachment.title)}</b><small>文风 · ${esc(m.attachment.data.author||'鱼板面文风库')}</small></span></button>`;
+  else if(m.attachment?.type==='character'){const ch=m.attachment.data;body=`<button class="shr-person-card" data-action="message" data-id="${esc(m.id)}"><div><span class="shr-avatar">${ch.avatar?`<img src="${esc(ch.avatar)}" alt="">`:esc(ch.name?.slice(0,1))}</span><b>${esc(ch.name)}</b></div><small>个人名片</small></button>`;}
+  else body=`<button class="shr-bubble" data-action="${m.kind==='option'?'chooseOption':'message'}" data-id="${esc(m.id)}">${m.attachment?`<b>${esc(m.attachment.title)}</b>\n`:''}${esc(m.text)}</button>`;
+  return `<article class="shr-message ${user?'mine':''}">${avatar(c,!user&&c.id?'card':'')}<div>${!user?`<small>${esc(c.name)}</small>`:''}${m.attachment&&m.text!==m.attachment.title?`<p class="shr-file-intro">${esc(m.text)}</p>`:''}${body}${user&&['pending','failed'].includes(m.status)?`<small>${m.status==='failed'?'发送失败':'待发送'}</small>`:''}</div></article>`;
+ },
+ renderPublisherChat(id){
+  const p=this.state.publishers.find(x=>x.id===id),bucket=this.state.worlds[storyKey()]?.news,items=(bucket?.items||[]).filter(x=>x.publisherId===id);
+  if(this.articleId){const article=items.find(x=>x.id===this.articleId);if(article)return `<main class="shr-chat shr-article-page">${this.header(p.name)}<div class="shr-scroll" data-scroll-key="article:${esc(article.id)}"><h1>${esc(article.title)}</h1><p class="shr-article-byline">${esc(p.name)} · ${time(article.createdAt)}</p><div class="shr-article">${esc(article.body)}</div></div></main>`;this.articleId='';}
+  return `<main class="shr-chat">${this.header(p.name,btn('refresh','刷新','news')+btn('publishers','•••'))}<div class="shr-messages shr-publisher-messages" data-scroll-key="publisher:${esc(storyKey())}:${esc(id)}" data-pull-refresh="news">${items.slice(-this.feedSize).map(a=>`<div class="shr-message-time">${time(a.createdAt)}</div><article class="shr-news-message"><button data-action="openArticle" data-id="${esc(a.id)}"><h3>${esc(a.title)}</h3><p>${esc(a.summary||a.body.slice(0,100))}</p><small>阅读全文 ›</small></button></article>`).join('')||'<div class="shr-empty">暂无消息</div>'}${bucket?.error?`<p class="error">${esc(bucket.error)}</p>`:''}${items.length>this.feedSize?btn('moreFeed','查看更早文章'):''}<div class="shr-pull-hint">上拉刷新</div></div></main>`;
+ },
+ renderContacts(){const rows=this.sortedContacts();return `<main class="shr-wide">${this.header('通讯录',btn('identify','添加朋友'))}<input id="shr-search" placeholder="搜索" aria-label="搜索联系人"><div class="shr-scroll">${rows.map(c=>`<div class="shr-row" data-search="${esc(c.name+' '+c.origin)}">${avatar(c,'card')}<button class="shr-contact-main" data-action="card" data-id="${esc(c.id)}"><b>${esc(c.name)}</b><small>${c.id===this.currentCharacterId?'当前聊天角色':esc(c.kind==='character'?'角色卡':c.origin||'联系人')}</small></button>${btn('private','发消息',c.id)}</div>`).join('')}${btn('publishers','公众号订阅 ›','','shr-contact-subscriptions')}${btn('add','手动添加联系人','','shr-contact-subscriptions')}</div></main>`;},
+ renderFeed(){const bucket=this.state.worlds[storyKey()]?.moments,items=bucket?.items||[];return `<main class="shr-wide shr-moments">${this.header('朋友圈',btn('refresh','刷新','moments'))}<div class="shr-scroll shr-feed" data-scroll-key="moments:${esc(storyKey())}" data-pull-refresh="moments">${items.slice(-this.feedSize).map(i=>{const contact=this.state.contacts.find(c=>c.name===i.author);return `<article class="shr-moment">${avatar(contact||{name:i.author})}<div><b>${esc(i.author)}</b><div class="shr-article">${esc(i.body)}</div><small>${time(i.createdAt)}</small></div></article>`;}).join('')||'<div class="shr-empty">暂无动态</div>'}${bucket?.error?`<p class="error">${esc(bucket.error)}</p>`:''}${items.length>this.feedSize?btn('moreFeed','查看更早动态'):''}<div class="shr-pull-hint">上拉刷新</div></div></main>`;},
+ renderDiscover(){return this.renderFeed();},
+ share(){this.modal('发送',`<div class="shr-share-grid">${btn('shareCards','▣<span>当前角色名片</span>')}${btn('shareStyles','▤<span>文风文件</span>')}</div>`);},
+ async shareCards(){const ch=currentCharacter();if(!ch)throw Error('请先打开一个酒馆角色聊天');const c=this.conversation();if(!c)throw Error('先打开一个聊天');c.messages.push({id:uid(),side:'user',text:ch.name,attachment:{type:'character',title:ch.name,data:clone(ch)},status:'pending',createdAt:Date.now()});c.updatedAt=Date.now();await this.save();this.closeModal();this.render();},
+ allStyles(){return fishboardStyles();},
+ shareStyles(){const rows=this.allStyles();this.modal('鱼板面文风库',rows.map(s=>`<label class="shr-pick"><input name="styles" type="checkbox" value="${esc(s.id)}"><span><b>${esc(s.name)}</b><small>${esc([s.author,s.note].filter(Boolean).join(' · '))}</small></span></label>`).join('')||'<p>鱼板面的文风库暂无可读取的文风。请先在鱼板面中保存文风。</p>',rows.length?btn('attachStyles','发送文件','','shr-primary'):'',rows);},
+ async attachStyles(){const rows=this.modalData.filter(s=>this.selected('styles').includes(s.id)),c=this.conversation();if(!rows.length)throw Error('请选择文风');for(const s of rows)c.messages.push({id:uid(),side:'user',text:s.name+'.txt',attachment:{type:'style',title:s.name+'.txt',data:clone(s)},status:'pending',createdAt:Date.now()});c.updatedAt=Date.now();await this.save();this.closeModal();this.render();},
+ message(id){const m=this.conversation()?.messages.find(m=>m.id===id);if(!m)return;if(m.attachment?.type==='style'){const st=m.attachment.data;this.modal(st.name,`<p class="shr-note">${esc(st.author)}</p><div class="shr-pre">${esc(st.text)}</div>`,btn('downloadStyle','保存 TXT')+btn('editChatMessage','消息管理',id),st);return;}if(m.attachment?.type==='character'){const ch=m.attachment.data;this.modal('个人名片',`<div class="shr-profile">${avatar(ch)}<h2>${esc(ch.name)}</h2></div><div class="shr-pre">${esc(ch.bio||'')}</div>`,btn('editChatMessage','消息管理',id));return;}this.editChatMessage(id);},
+ downloadStyle(){const s=this.modalData,url=URL.createObjectURL(new Blob([s.text],{type:'text/plain;charset=utf-8'})),a=document.createElement('a');a.href=url;a.download=s.name+'.txt';a.click();setTimeout(()=>URL.revokeObjectURL(url),10000);},
+ async loadModels(){
+  if(this.loadingModels)return;const dialog=this.root.querySelector('.shr-modal'),v=this.values();this.loadingModels=true;const b=dialog.querySelector('[data-action="loadModels"]');if(b){b.disabled=true;b.textContent='正在拉取…';}
+  const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),30000);
+  try{const models=await fetchModels(v.customUrl,v.customKey,controller.signal);if(!dialog.isConnected)return;const current=this.values();if(current.customUrl!==v.customUrl||current.customKey!==v.customKey)throw Error('地址或密钥已变化，请重新拉取');const select=dialog.querySelector('[name="customModel"]');select.replaceChildren(...models.map(id=>{const opt=document.createElement('option');opt.value=id;opt.textContent=id;return opt;}));if(models.includes(v.customModel))select.value=v.customModel;this.status(`已读取 ${models.length} 个模型`);}catch(e){throw Error(e.name==='AbortError'?'模型列表请求超时，请重试':e.message);}finally{clearTimeout(timer);this.loadingModels=false;if(b){b.disabled=false;b.textContent='拉取模型';}}
+ },
+ bindPullRefresh(){
+  let gesture=null;
+  this.root.addEventListener('touchstart',e=>{const el=e.target.closest('[data-pull-refresh]');gesture=el&&e.touches.length===1?{el,y:e.touches[0].clientY,x:e.touches[0].clientX,bottom:el.scrollHeight-el.scrollTop-el.clientHeight<8,type:el.dataset.pullRefresh,key:storyKey()}:null;},{passive:true});
+  this.root.addEventListener('touchend',e=>{const g=gesture;gesture=null;if(!g||!g.bottom||!g.el.isConnected||g.key!==storyKey()||this.gen.busy||this.refreshing||!e.changedTouches.length)return;const t=e.changedTouches[0];if(g.y-t.clientY>=65&&Math.abs(g.x-t.clientX)<50)this.refresh(g.type,true).catch(e=>this.error(e));},{passive:true});
+ },
+ rememberScroll(){this.scrollPositions||=new Map();this.root?.querySelectorAll('[data-scroll-key]').forEach(e=>this.scrollPositions.set(e.dataset.scrollKey,{top:e.scrollTop,height:e.scrollHeight,bottom:e.scrollHeight-e.scrollTop-e.clientHeight<35}));},
+ restoreScroll(){this.root.querySelectorAll('[data-scroll-key]').forEach(e=>{const old=this.scrollPositions?.get(e.dataset.scrollKey);e.scrollTop=old?(old.bottom?e.scrollHeight:old.top):e.classList.contains('shr-messages')?e.scrollHeight:0;});},
+};}

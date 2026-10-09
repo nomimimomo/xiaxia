@@ -7,7 +7,7 @@ import { convertText } from '../text-script.js';
 test('1.0升级保留会话/开关/文章，默认港媒号不重复添加，取消关注不被升级还原',()=>{
  const s=freshState();s.conversations=[{id:'c',members:['a'],messages:[{text:'旧记录'}],turns:[]}];s.worlds.w={news:{items:[{body:'旧文章'}]}};
  upgradeFeatures(s);const ids=s.publishers.map(p=>p.id);s.publishers[0].followed=false;upgradeFeatures(s);
- assert.deepEqual(s.publishers.map(p=>p.id),ids);assert.equal(s.publishers[0].followed,false);assert.equal(s.conversations[0].messages[0].text,'旧记录');assert.equal(s.worlds.w.news.items[0].body,'旧文章');assert.equal(s.settings.feeds.news.auto,false);assert.equal(features(s.conversations[0]).mode,'chat');
+ assert.deepEqual(s.publishers.map(p=>p.id),ids);assert.equal(s.publishers[0].followed,false);assert.equal(s.conversations[0].messages[0].text,'旧记录');assert.equal(s.worlds.w.news.items[0].body,'旧文章');assert.equal(s.settings.feeds.news.auto,false);assert.equal(features(s.conversations[0]).readStory,true);
 });
 test('同名公众号同范围不重复，故事范围隔离，取消订阅后无生成候选',()=>{
  const s=upgradeFeatures(freshState());s.publishers[0].followed=false;
@@ -19,11 +19,11 @@ test('公众号设置或订阅改变会使新闻更新标识改变，不影响�
  const s=upgradeFeatures(freshState()),ctx={key:'story',signature:'same'};
  const first=await feedSignature(ctx,'news',s);s.publishers[0].topics='美食';assert.notEqual(await feedSignature(ctx,'news',s),first);assert.equal(await feedSignature(ctx,'moments',s),'same');
 });
-test('聊天推荐只返回名片，候选和讨论分开，非成员和错模式拒绝',()=>{
+test('聊天推荐只返回名片，候选和讨论分开，直接使用预设选项，拒绝非成员及无来源候选',()=>{
  const ref={key:'story',floor:2,signature:'x'},s=upgradeFeatures(freshState());
- const json=JSON.stringify({messages:[{contactId:'a',kind:'text',text:'先别着急'},{contactId:'a',kind:'option',text:'我推开茶馆的门。',reader:'栗子er',optionType:'日常'},{contactId:'a',kind:'publisher',text:'看看这个号',publisher:{name:'食报',intro:'街边小店',topics:'小吃',style:'轻松'}}]});
- const out=parseChatResponse(json,['a'],'choices','story',ref,8);assert.equal(out[1].contextRef.floor,2);assert.equal(out[2].publisher.scope,'story');assert.equal(out[2].publisher.script,'simplified');assert.equal(s.publishers.length,1);
- assert.throws(()=>parseChatResponse(json,['a'],'chat','story',ref));assert.throws(()=>parseChatResponse(json,['other'],'choices','story',ref));
+ const json=JSON.stringify({messages:[{contactId:'a',kind:'text',text:'先别着急'},{contactId:'a',kind:'option',text:'要不先去茶馆看看？',insertText:'我推开茶馆的门。'},{contactId:'a',kind:'publisher',text:'看看这个号',publisher:{name:'食报',intro:'街边小店',topics:'小吃',style:'轻松'}}]});
+ const out=parseChatResponse(json,['a'],'choices','story',ref,8);assert.equal(out[1].contextRef.floor,2);assert.equal(out[1].text,'要不先去茶馆看看？');assert.equal(out[1].insertText,'我推开茶馆的门。');assert.equal(out[2].publisher.scope,'story');assert.equal(out[2].publisher.script,'simplified');assert.equal(s.publishers.length,1);
+ assert.equal(parseChatResponse(json,['a'],'chat','story',ref)[1].kind,'option');assert.throws(()=>parseChatResponse(json,['a'],'chat','story',null));assert.throws(()=>parseChatResponse(json,['other'],'choices','story',ref));
 });
 test('文章必须来自已关注公众号且具备标题摘要正文',()=>{
  const ps=[{id:'p',name:'港媒号'}];const r=parseArticles('{"items":[{"publisherId":"p","title":"开张","summary":"新店","body":"正文"}]}',4,ps);assert.equal(r[0].author,'港媒号');

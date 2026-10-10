@@ -1,9 +1,9 @@
-import {installPullRefresh} from './pull-refresh.js?v=1.6';
-import {diagnostics} from './diagnostics.js?v=1.6';
-import {uid,clone} from './core.js?v=1.6';
-import {ctx,storyKey,characterItems} from './bridge.js?v=1.6';
-import {activePublishers} from './features.js?v=1.6';
-import {currentCharacter,fishboardStyles,fetchModels} from './chat-integration.js?v=1.6';
+import {installPullRefresh} from './pull-refresh.js?v=1.8';
+import {diagnostics} from './diagnostics.js?v=1.8';
+import {uid,clone} from './core.js?v=1.8';
+import {ctx,storyKey,characterItems} from './bridge.js?v=1.8';
+import {activePublishers} from './features.js?v=1.8';
+import {currentCharacter,fishboardStyles,fetchModels} from './chat-integration.js?v=1.8';
 export function wechatMethods({esc,btn,avatar,time,field}){return {
  syncCurrentCharacter(){
   if(!this.state)return null;const ch=currentCharacter();if(!ch)return null;
@@ -23,7 +23,7 @@ export function wechatMethods({esc,btn,avatar,time,field}){return {
   if(selected)return list+this.renderPublisherChat(selected);
   if(!c)return list+`<main class="shr-chat shr-empty"><p>选择一个聊天</p></main>`;
   const pending=c.messages.filter(m=>m.side==='user'&&['pending','failed'].includes(m.status)).length;
-  return list+`<main class="shr-chat">${this.header(c.title,btn('groupInfo','•••',c.id))}<div class="shr-messages" data-scroll-key="chat:${esc(c.id)}">${c.messages.length>this.pageSize?btn('moreMessages','查看更早消息'):''}${c.messages.slice(-this.pageSize).map(m=>this.renderMessage(m)).join('')}</div><div class="shr-compose"><div>${btn('share','＋','','shr-plus')}<textarea id="shr-draft" rows="2" placeholder="发消息" aria-label="消息输入"></textarea>${btn('queue','发送','','shr-primary')}${btn('send','接收回复','','shr-receive')}</div></div></main>`;
+  return list+`<main class="shr-chat">${this.header(this.sending?'正在输入…':c.title,btn('groupInfo','•••',c.id))}<div class="shr-messages" data-scroll-key="chat:${esc(c.id)}">${c.messages.length>this.pageSize?btn('moreMessages','查看更早消息'):''}${c.messages.slice(-this.pageSize).map(m=>this.renderMessage(m)).join('')}</div><div class="shr-compose"><div>${btn('share','＋','','shr-plus')}<textarea id="shr-draft" rows="2" placeholder="发消息" aria-label="消息输入"></textarea>${btn('queue','发送','','shr-primary')}${btn('send','接收回复','','shr-receive')}</div></div></main>`;
  },
  renderMessage(m){
   if(m.kind==='group_name')return `<div class="shr-message-time">${esc(this.contact(m.contactId)?.name||'成员')}将群名改为「${esc(m.groupName)}」</div>`;
@@ -32,7 +32,7 @@ export function wechatMethods({esc,btn,avatar,time,field}){return {
   if(m.kind==='publisher'&&m.publisher)body=this.renderPublisherMessage(m);
   else if(m.attachment?.type==='style')body=`<button class="shr-file-card" data-action="message" data-id="${esc(m.id)}"><span class="shr-file-icon">TXT</span><span><b>${esc(m.attachment.title)}</b><small>文风 · ${esc(m.attachment.data.author||'鱼板面文风库')}</small></span></button>`;
   else if(m.attachment?.type==='character'){const ch=m.attachment.data;body=`<button class="shr-person-card" data-action="message" data-id="${esc(m.id)}"><div><span class="shr-avatar">${ch.avatar?`<img src="${esc(ch.avatar)}" alt="">`:esc(ch.name?.slice(0,1))}</span><b>${esc(ch.name)}</b></div><small>个人名片</small></button>`;}
-  else body=`<button class="shr-bubble" data-action="${m.kind==='option'?'chooseOption':'message'}" data-id="${esc(m.id)}">${m.attachment?`<b>${esc(m.attachment.title)}</b>\n`:''}${esc(m.text)}</button>`;
+  else body=`<button class="shr-bubble" data-action="${m.kind==='option'?'chooseOption':'message'}" data-id="${esc(m.id)}">${m.attachment?`<b>${esc(m.attachment.title)}</b>\n`:''}${m.kind==='option'&&m.reader?`<small class="shr-reader-name">${esc(m.reader)}</small>`:''}${esc(m.text)}</button>`;
   if(this.editingMessage===m.id)body=`<div class="shr-inline-edit"><textarea rows="4">${esc(this.editText)}</textarea><div>${btn('cancelInline','取消')}${btn('saveInline','保存')}${btn('resendInline','重发','','shr-primary')}</div></div>`;
   return `<article class="shr-message ${user?'mine':''}">${avatar(c,!user&&c.id?'card':'')}<div>${!user?`<small>${esc(c.name)}</small>`:''}${m.attachment&&m.text!==m.attachment.title?`<p class="shr-file-intro">${esc(m.text)}</p>`:''}${body}${user&&m.status==='failed'?`<button class="shr-failed" data-action="retryMessage" data-id="${esc(m.id)}" aria-label="发送失败，点击重试">!</button>`:''}</div></article>`;
  },
@@ -42,7 +42,7 @@ export function wechatMethods({esc,btn,avatar,time,field}){return {
   return `<main class="shr-chat">${this.header(p.name,btn('refresh','刷新','news')+btn('publishers','•••'))}<div class="shr-messages shr-publisher-messages" data-scroll-key="publisher:${esc(storyKey())}:${esc(id)}" data-pull-refresh="news">${items.slice(-this.feedSize).map(a=>`<div class="shr-message-time">${time(a.createdAt)}</div><article class="shr-news-message"><button data-action="openArticle" data-id="${esc(a.id)}"><h3>${esc(a.title)}</h3><p>${esc(a.summary||a.body.slice(0,100))}</p><small>阅读全文 ›</small></button></article>`).join('')||'<div class="shr-empty">暂无消息</div>'}${bucket?.error?`<p class="error">${esc(bucket.error)}</p>`:''}${items.length>this.feedSize?btn('moreFeed','查看更早文章'):''}<button type="button" class="shr-pull-hint" data-action="refresh" data-id="news">上拉刷新 · 也可点此刷新</button></div></main>`;
  },
  renderContacts(){const rows=this.sortedContacts();return `<main class="shr-wide">${this.header('通讯录',btn('identify','添加朋友'))}<input id="shr-search" placeholder="搜索" aria-label="搜索联系人"><div class="shr-scroll">${rows.map(c=>`<div class="shr-row" data-search="${esc(c.name+' '+c.origin)}">${avatar(c,'card')}<button class="shr-contact-main" data-action="card" data-id="${esc(c.id)}"><b>${esc(c.name)}</b><small>${c.id===this.currentCharacterId?'当前聊天角色':esc(c.kind==='character'?'角色卡':c.origin||'联系人')}</small></button>${btn('private','发消息',c.id)}</div>`).join('')}${btn('publishers','公众号订阅 ›','','shr-contact-subscriptions')}${btn('add','手动添加联系人','','shr-contact-subscriptions')}</div></main>`;},
- renderFeed(){const bucket=this.state.worlds[storyKey()]?.moments,items=bucket?.items||[];return `<main class="shr-wide shr-moments">${this.header('朋友圈',btn('refresh','刷新','moments'))}<div class="shr-scroll shr-feed" data-scroll-key="moments:${esc(storyKey())}" data-pull-refresh="moments">${items.slice(-this.feedSize).map(i=>{const contact=this.state.contacts.find(c=>c.name===i.author);return `<article class="shr-moment">${avatar(contact||{name:i.author})}<div><b>${esc(i.author)}</b><div class="shr-article">${esc(i.body)}</div><small>${time(i.createdAt)}</small></div></article>`;}).join('')||'<div class="shr-empty">暂无动态</div>'}${bucket?.error?`<p class="error">${esc(bucket.error)}</p>`:''}${items.length>this.feedSize?btn('moreFeed','查看更早动态'):''}<button type="button" class="shr-pull-hint" data-action="refresh" data-id="moments">上拉刷新 · 也可点此刷新</button></div></main>`;},
+ renderFeed(){const bucket=this.state.worlds[storyKey()]?.moments,items=bucket?.items||[];return `<main class="shr-wide shr-moments">${this.header('朋友圈',btn('refresh','刷新','moments'))}<div class="shr-scroll shr-feed" data-scroll-key="moments:${esc(storyKey())}" data-pull-refresh="moments">${items.slice(-this.feedSize).map(i=>{const contact=this.state.contacts.find(c=>c.name===i.author);return `<article class="shr-moment"><div><b>${esc(i.author)}</b><div class="shr-article">${esc(i.body)}</div><small>${time(i.createdAt)}</small></div></article>`;}).join('')||'<div class="shr-empty">暂无动态</div>'}${bucket?.error?`<p class="error">${esc(bucket.error)}</p>`:''}${items.length>this.feedSize?btn('moreFeed','查看更早动态'):''}<button type="button" class="shr-pull-hint" data-action="refresh" data-id="moments">上拉刷新 · 也可点此刷新</button></div></main>`;},
  renderDiscover(){return this.renderFeed();},
  share(){this.modal('发送',`<div class="shr-share-grid">${btn('shareCards','▣<span>当前角色名片</span>')}${btn('shareStyles','▤<span>文风文件</span>')}</div>`);},
  async shareCards(){const ch=currentCharacter();if(!ch)throw Error('请先打开一个酒馆角色聊天');const c=this.conversation();if(!c)throw Error('先打开一个聊天');c.messages.push({id:uid(),side:'user',text:ch.name,attachment:{type:'character',title:ch.name,data:clone(ch)},status:'pending',createdAt:Date.now()});c.updatedAt=Date.now();await this.save();this.closeModal();this.render();},

@@ -1,3 +1,4 @@
+import {VERSION} from './core.js?v=1.8';
 export function errorReason(e) {
  const message=String(e?.message||'');
  for(const [pattern,code] of [[/酒馆正在生成/,'tavern_busy'],[/鲜虾正在生成/,'shrimp_busy'],[/冲突|其他页面|其他设备/,'storage_conflict'],[/超时|abort/i,'timeout'],[/fetch|network/i,'network'],[/JSON|格式|没有返回文本/,'response_format'],[/预设|Prompt/,'preset'],[/切换|已变化|已改变/,'context_changed'],[/保存|读取/,'storage'],[/API|模型|地址/,'api_configuration']]) if(pattern.test(message))return code;
@@ -32,7 +33,7 @@ export class Diagnostics {
         catch (e) { this.log('failure', { id, operation, elapsed: Date.now()-start, errorType: e?.name || 'Error', reason: errorReason(e), ...state() }); throw e; }
         finally { clearInterval(timer); this.active.delete(id); this.log('finished', { id, operation, ...state() }); }
     }
-    report(state = {}) { return JSON.stringify({ version:'1.4', persistence:this.persistence, state, active:[...this.active].map(([id,x])=>({id,operation:x.operation,elapsed:Date.now()-x.start})), events:this.rows },null,2); }
+    report(state = {}) { return JSON.stringify({ version:VERSION, persistence:this.persistence, state, active:[...this.active].map(([id,x])=>({id,operation:x.operation,elapsed:Date.now()-x.start})), events:this.rows },null,2); }
 }
 let storage; try { storage = globalThis.localStorage; } catch {}
 export const diagnostics = new Diagnostics(storage);

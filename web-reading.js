@@ -1,28 +1,39 @@
-import {uid} from './core.js?v=1.6';
-import {diagnostics} from './diagnostics.js?v=1.6';
+import {readerLocation,validateReaderMessage} from './reader-link.js?v=1.8';
+import {uid} from './core.js?v=1.8';
+import {diagnostics} from './diagnostics.js?v=1.8';
 export function webURL(value){const u=new URL(value.trim());if(!['https:','http:'].includes(u.protocol)||u.username||u.password)throw Error('请填写完整的 http / https 网页地址');return u.href;}
 export function webBook(v,old={}){return {...old,id:old.id||uid(),kind:'book',sourceType:'web',title:v.title.trim()||new URL(webURL(v.url)).hostname,url:webURL(v.url),coverUrl:v.coverUrl?.trim()?webURL(v.coverUrl):'',group:v.group?.trim()||'',createdAt:old.createdAt||Date.now()};}
 export function webReadingMethods({esc,btn,field}){return {
- webRender(){const r=this.readingRow(this.webKey);return `<main class="shr-wide shr-web">${this.header(r.title,btn('web:exit','书架'))}<div class="shr-toolbar">${btn('web:site','网页')}${btn('web:paste','粘贴阅读')}${btn('web:excerpt','摘抄')}${btn('web:progress','记进度')}${btn('web:edit','资料')}<a href="${esc(r.chapterUrl||r.url)}" target="_blank" rel="noopener noreferrer">原站打开 ↗</a></div>${this.webText?`<div class="shr-scroll shr-web-text" tabindex="0">${esc(this.webText)}</div>`:`<p class="shr-note">来源：${esc(new URL(r.url).hostname)}。账号请在原站登录。网页不显示或登录失败时，请用“原站打开”。内页跳转后的地址需在“记进度”中粘贴。</p><iframe title="原站阅读" src="${esc(r.chapterUrl||r.url)}" sandbox="allow-scripts allow-forms allow-same-origin allow-popups" referrerpolicy="no-referrer"></iframe>`}<small class="shr-web-foot">${esc(r.chapter||'尚未记录章节')} · 鲜虾记录，不代表平台同步</small></main>`;},
+ bindReaderBridge(){window.addEventListener('message',e=>{const frame=this.root.querySelector('.shr-web iframe');if(frame&&e.source===frame.contentWindow&&e.data?.type==='shrimp.reader.ready'){try{const u=new URL(e.origin);if(u.protocol==='https:'&&(u.hostname==='jjwxc.net'||u.hostname.endsWith('.jjwxc.net')))frame.contentWindow.postMessage({type:'shrimp.reader.connect',token:this.readerToken},e.origin);}catch{}return;}const data=validateReaderMessage(e,frame,this.readerToken);if(!data)return;this.readerConnected=true;this.readerCurrentUrl=data.url;const key=this.webKey;
+  this.readerSaveChain=(this.readerSaveChain||Promise.resolve()).catch(()=>{}).then(async()=>{
+   if(this.webKey!==key||!this.readingReady)return;
+   const existing=this.reading.rows('book').find(r=>r.bookKey===data.bookKey),place=existing?.place||'tavern';
+   if(!data.chapterId&&existing?.lastChapter)return;
+   const row={...(existing||{}),id:existing?.id||uid(),kind:'book',sourceType:'web',sourceKind:'novel',bookKey:data.bookKey,title:data.bookTitle||existing?.title||'晋江 · 作品 '+data.novelId,url:data.url,lastUrl:data.url,lastChapter:data.chapterId,lastChapterTitle:data.title,createdAt:existing?.createdAt||Date.now(),lastRead:Date.now()};
+   if(existing?.lastUrl===data.url&&existing?.lastChapterTitle===data.title)return;
+   await this.reading.put(place,row);this.readerLastSaved=Date.now();diagnostics.log('reading.resume.saved',{count:1});
+  }).catch(e=>{this.readerLastError=e.message;this.error(e);});
+ });},
+ connectReader(){const frame=this.root?.querySelector('.shr-web iframe');if(!frame||frame.dataset.connected)return;frame.dataset.connected='1';this.readerToken=uid();this.readerConnected=false;this.readerLastError='';const token=this.readerToken;
+
+ },
+
+ webRender(){const r=this.readingRow(this.webKey);return `<main class="shr-wide shr-web"><header class="shr-mini-head"><b>${esc(r.title)}</b><div class="shr-mini-capsule"><button type="button" data-action="web:menu" aria-label="更多">•••</button><span></span><button type="button" data-action="web:exit" aria-label="关闭小程序">◉</button></div></header><iframe title="${esc(r.title)}" data-reader-key="${esc(this.webKey)}" src="${esc(r.lastUrl||r.url)}" sandbox="allow-scripts allow-forms allow-same-origin" referrerpolicy="no-referrer"></iframe></main>`;},
  async webAction(a,id){
  diagnostics.log('reading.web',{operation:a});
  if(a==='platform'){
-  const platforms={jinjiang:{title:'晋江文学城',url:'https://wap.jjwxc.net/'},quark:{title:'夸克网盘',url:'https://pan.quark.cn/'}};
+  const platforms={jinjiang:{title:'晋江文学城',url:'https://wap.jjwxc.net/'}};
   const platform=platforms[id];if(!platform)throw Error('未知阅读应用');
   let row=this.reading.rows('book').find(r=>r.platformId===id);
   if(!row){row={...webBook(platform),platformId:id,sourceKind:'app'};const place=this.readingDefault||'browser';await this.reading.put(place,row);row={...row,place};}
   return this.webAction('open',row.place+':'+row.id);
  }
- if(a==='add'||a==='edit'){const r=a==='edit'?this.readingRow(this.webKey):null;this.modal(r?'网页书籍资料':'添加网页书籍',`${field('url','粘贴网页地址',r?.url||'')}<details><summary>名称、封面与分组（选填）</summary>${field('title','名称',r?.title||'')}${field('coverUrl','封面图片地址',r?.coverUrl||'')}${field('group','分组',r?.group||'')}</details>${r?'':this.readingPlaceField(this.readingDefault||'browser')}<p>只保存封面地址、来源和阅读记录，不下载书籍。夸克里看的第三方网站，请复制实际网页地址。</p>`,btn('web:save','保存'),r);return;}
- if(a==='save'){const v=this.values(),old=this.modalData,r=webBook(v,old||{});if(new URL(r.url).origin===location.origin)throw Error('请填写阅读平台地址，不能嵌入酒馆自身');if(this.reading.rows('book').some(x=>x.url===r.url&&x.id!==r.id))throw Error('这个网页已经在书架中');await this.reading.put(old?.place||v.place,r);this.closeModal();this.render();return;}
- if(a==='open'){this.webKey=id;this.webText='';this.render();return;}
- if(a==='exit'){this.webKey=null;this.webText='';this.render();return;}
- if(a==='site'){this.webText='';this.render();return;}
- const r=this.readingRow(this.webKey);
- if(a==='paste'){this.modal('临时阅读',`<p>在原站复制本章文字，粘贴后用鲜虾排版阅读。正文只在本次打开期间保留，关闭窗口后清空。</p><label class="shr-field">正文<textarea name="text" rows="9"></textarea></label>`,btn('web:read','开始阅读'));return;}
- if(a==='read'){const text=this.values().text.trim();if(!text)throw Error('请先粘贴正文');if(text.length>200000)throw Error('请分章节粘贴，单次最多 20 万字');this.webText=text;this.closeModal();this.render();return;}
- if(a==='excerpt'){const selection=window.getSelection(),reader=this.root.querySelector('.shr-web-text');const text=reader&&selection?.anchorNode&&reader.contains(selection.anchorNode)?selection.toString():'';this.readingEditor();for(const [name,value] of Object.entries({text,source:r.title,chapter:r.chapter||''})){this.root.querySelector(`[name="${name}"]`).value=value;}this.webExcerpt={sourceUrl:r.chapterUrl||r.url,bookId:r.id};return;}
- if(a==='progress'){this.modal('记录阅读位置',`${field('chapter','章节 / 位置',r.chapter||'')}${field('chapterUrl','当前章节网页地址',r.chapterUrl||r.url)}<p>这条记录保存在鲜虾；不会写入晋江或夸克账户。</p>`,btn('web:progressSave','保存'),r);return;}
- if(a==='progressSave'){const v=this.values(),chapterUrl=webURL(v.chapterUrl);if(new URL(chapterUrl).origin===location.origin)throw Error('不能嵌入酒馆自身');await this.reading.put(r.place,{...r,chapter:v.chapter.trim(),chapterUrl,lastRead:Date.now()});this.closeModal();this.render();}
+ if(a==='add'){this.modal('添加网站',`${field('url','网站地址','')}${field('title','名称（选填）','')}`,btn('web:save','添加'));return;}
+ if(a==='save'){const v=this.values(),old=this.modalData,r=webBook(v,old||{});try{const point=readerLocation(r.url);if(point)Object.assign(r,{sourceKind:'novel',bookKey:point.bookKey,lastUrl:point.url,lastChapter:point.chapterId});}catch{}if(new URL(r.url).origin===location.origin)throw Error('请填写阅读平台地址，不能嵌入酒馆自身');if(this.reading.rows('book').some(x=>x.url===r.url&&x.id!==r.id))throw Error('这个网页已经在书架中');await this.reading.put(old?.place||v.place||this.readingDefault||'browser',r);this.closeModal();this.render();return;}
+ if(a==='open'){this.readerCurrentUrl=null;this.readerLastSaved=0;this.webKey=id;this.webText='';this.render();return;}
+ if(a==='exit'){this.closeModal();await this.readerSaveChain;this.webKey=null;this.readerToken=null;this.webText='';this.render();return;}
+ if(a==='menu'){this.modal('更多',`<div class="shr-mini-menu">${btn('web:reload','重新加载')}${btn('web:exit','返回书架')}</div><p class="shr-note">${this.readerLastError?'续读保存失败':this.readerLastSaved&&this.readerConnected?'已记录章节网址':'自动续读需安装配套脚本'}</p>`);return;}
+ if(a==='reload'){this.closeModal();const frame=this.root.querySelector('.shr-web iframe');if(frame){const r=this.readingRow(this.webKey);frame.src=this.readerCurrentUrl||r.lastUrl||r.url;}return;}
+ throw Error('此功能未提供');
  }
 };}

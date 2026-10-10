@@ -1,4 +1,4 @@
-import {diagnostics} from './diagnostics.js?v=1.6';
+import {diagnostics} from './diagnostics.js?v=1.8';
 // Adapted from the supplied fishboard viewport/band/rect correction rules.
 export function panelBounds(vp,topBar,sendForm,mobile){
  let top=vp.y+8,bottom=vp.y+vp.h-8;

@@ -57,3 +57,32 @@
 #shrimp-app .shr-list .shr-row{padding:11px 10px;gap:9px}#shrimp-app .shr-row small{overflow:hidden;white-space:nowrap;text-overflow:ellipsis}#shrimp-app .shr-nav{gap:10px;padding:12px 4px}#shrimp-app .shr-nav button{padding:8px 2px;font-size:12px}
 #shrimp-app .shr-messages{padding:16px 12px}#shrimp-app .shr-message{margin-bottom:12px;max-width:94%}#shrimp-app .shr-bubble{font-size:14px;line-height:1.6;padding:8px 10px}#shrimp-app .shr-compose{flex:0 0 auto;padding:8px 10px}#shrimp-app .shr-compose textarea{height:52px;min-height:52px;max-height:80px;margin:0;padding:5px;font-size:14px}#shrimp-app .shr-compose>div{gap:5px}#shrimp-app .shr-compose button{padding:5px 10px}
 @media(max-width:700px){#shrimp-app{grid-template-columns:1fr}#shrimp-app .shr-list{width:100%}#shrimp-app .shr-compose textarea{height:38px;min-height:38px}#shrimp-app .shr-nav{padding:2px 8px;gap:4px}#shrimp-app .shr-nav button{padding:5px 2px}}
+/* 1.7: one compact composer, balanced desktop columns, WeUI-style miniapp navigation. */
+#shrimp-app .shr-list{width:170px;flex-shrink:0}
+#shrimp-app .shr-compose>div{grid-template-columns:32px minmax(0,1fr) 60px;align-items:end;gap:6px}
+#shrimp-app .shr-compose textarea{grid-column:2;grid-row:1;height:58px;min-height:58px;max-height:110px;background:#fff;border:1px solid #e5e5e5;border-radius:4px}
+#shrimp-app .shr-compose .shr-plus{grid-column:1;grid-row:1;width:32px;height:34px;padding:0}
+#shrimp-app .shr-compose [data-action=queue]{grid-column:3;grid-row:1;width:60px;height:34px;margin:0;padding:0;align-self:end}
+#shrimp-app .shr-avatar svg{display:block;width:100%;height:100%;padding:5px;color:#9ca8a0}
+#shrimp-app .shr-mini-section{padding:12px 16px;border-bottom:1px solid var(--shr-line);flex-shrink:0}
+#shrimp-app .shr-mini-section>small{color:#888;font-size:11px}
+#shrimp-app .shr-reading-apps{display:grid;grid-template-columns:repeat(auto-fill,minmax(70px,1fr));gap:16px 8px;padding:12px 0 0;max-height:150px;overflow:auto}
+#shrimp-app .shr-reading-apps button{border:0;background:none;padding:0;min-width:0;display:flex;flex-direction:column;align-items:center;gap:6px;font-size:11px}
+#shrimp-app .shr-reading-apps button>span:last-child{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#shrimp-app .shr-app-icon{width:46px;height:46px;border-radius:12px;display:grid;place-items:center;background:#dfece5;color:#397955;font-size:17px}
+#shrimp-app .shr-app-jj{background:#e5eed7;color:#607533;font-size:13px}#shrimp-app .shr-app-add{background:#eee;color:#777;font-size:26px}
+#shrimp-app .shr-mini-head{display:flex;align-items:center;gap:8px;height:48px;flex-shrink:0;padding:0 10px;background:#f7f7f7;border-bottom:1px solid #eee}
+#shrimp-app .shr-mini-head>b{flex:1;min-width:0;text-overflow:ellipsis;overflow:hidden;white-space:nowrap;font-size:14px;font-weight:500}
+#shrimp-app .shr-mini-capsule{display:flex;align-items:center;border:1px solid #ddd;border-radius:18px;height:30px;background:#fff}
+#shrimp-app .shr-mini-capsule button{width:40px;height:28px;padding:0;background:none;font-size:16px}#shrimp-app .shr-mini-capsule span{width:1px;height:16px;background:#ddd}
+#shrimp-app .shr-mini-menu{display:flex;gap:12px}#shrimp-app .shr-txt-body{white-space:pre-wrap;overflow-wrap:anywhere;user-select:text;background:#f8f5ed;padding:22px;font-size:17px;line-height:1.9}
+#shrimp-app .shr-txt-actions{display:flex;align-items:center;justify-content:space-between;gap:5px;padding:8px;flex-wrap:wrap;flex-shrink:0}
+#shrimp-app .shr-moment{display:block!important}
+@media(max-width:700px){#shrimp-app .shr-list{width:100%}#shrimp-app .shr-compose textarea{height:38px;min-height:38px}#shrimp-app .shr-reading-filters{padding:7px 12px}#shrimp-app .shr-mini-section{padding:8px 12px}#shrimp-app .shr-reading-apps{max-height:100px}}
+/* 1.8: manual reply control; both actions share one height. */
+#shrimp-app .shr-compose>div{grid-template-columns:32px minmax(0,1fr) 68px 84px;align-items:center}
+#shrimp-app .shr-compose textarea{grid-column:1 / -1;grid-row:1;min-height:54px;height:54px}
+#shrimp-app .shr-compose .shr-plus{grid-column:1;grid-row:2}
+#shrimp-app .shr-compose [data-action=queue]{grid-column:3;grid-row:2;width:68px;height:34px;min-height:34px;padding:0;margin:0}
+#shrimp-app .shr-compose [data-action=send]{grid-column:4;grid-row:2;width:84px;height:34px;min-height:34px;padding:0;margin:0;box-sizing:border-box}
+#shrimp-app .shr-reader-name{display:block;margin-bottom:5px;color:#576b95}

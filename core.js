@@ -1,4 +1,4 @@
-export const VERSION = '1.6';
+export const VERSION = '1.8';
 export const clone = x => JSON.parse(JSON.stringify(x));
 export function uid() {
     if (globalThis.crypto?.randomUUID) return crypto.randomUUID();
@@ -40,8 +40,17 @@ export function orderedPrompts(preset, overrides = {}) {
     return result;
 }
 export function parseJSON(text) {
-    const clean = String(text).trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '');
-    try { return JSON.parse(clean); } catch { throw new Error('模型未返回有效 JSON，原有记录已保留，可重试'); }
+    const clean = String(text).trim().replace(/^<think>[\s\S]*?<\/think>\s*/i, '').trim();
+    try { return JSON.parse(clean); } catch {}
+    const blocks=[...clean.matchAll(/```(?:json)?\s*([\s\S]*?)```/gi)];
+    if(blocks.length===1){try{return JSON.parse(blocks[0][1].trim());}catch{}}
+    // Accept one complete JSON object surrounded by commentary; never eval or invent fields.
+    const start=clean.search(/[\[{]/);if(start>=0){let quoted=false,escaped=false,depth=0;
+      for(let i=start;i<clean.length;i++){const c=clean[i];if(quoted){if(escaped)escaped=false;else if(c==='\\')escaped=true;else if(c==='"')quoted=false;continue;}
+        if(c==='"')quoted=true;else if(c==='{'||c==='[')depth++;else if(c==='}'||c===']'){if(--depth===0){if(/[\[{]/.test(clean.slice(i+1)))break;try{return JSON.parse(clean.slice(start,i+1));}catch{break;}}}
+      }
+    }
+    throw new Error('模型未返回有效 JSON，原有记录已保留，可重试');
 }
 export function parseReply(text, members) {
     const data = parseJSON(text), rows = Array.isArray(data) ? data : data.messages;

@@ -1,6 +1,6 @@
-import {compactMessages,safeApiError} from './api-utils.js?v=1.6';
-import { diagnostics, instrument } from './diagnostics.js?v=1.6';
-import { clone, digest, orderedPrompts, parseJSON } from './core.js?v=1.6';
+import {compactMessages,safeApiError} from './api-utils.js?v=1.8';
+import { diagnostics, instrument } from './diagnostics.js?v=1.8';
+import { clone, digest, orderedPrompts, parseJSON } from './core.js?v=1.8';
 export const ctx = () => window.SillyTavern?.getContext?.();
 export function presets() {
     const m = ctx()?.getPresetManager?.('openai');

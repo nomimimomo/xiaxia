@@ -1,7 +1,7 @@
-import {uid} from './core.js?v=1.9';
-import {BrowserLibrary,TavernLibrary,ReadingRepository,bookFromFile,excerptLines,exportExcerpts} from './reading-store.js?v=1.9';
-import {diagnostics} from './diagnostics.js?v=1.9';
-import {ctx} from './bridge.js?v=1.9';
+import {uid} from './core.js?v=2.0';
+import {BrowserLibrary,TavernLibrary,ReadingRepository,bookFromFile,excerptLines,exportExcerpts} from './reading-store.js?v=2.0';
+import {diagnostics} from './diagnostics.js?v=2.0';
+import {ctx} from './bridge.js?v=2.0';
 const label=p=>p==='tavern'?'酒馆':'当前浏览器';
 const key=r=>r.place+':'+r.id;
 export function readingMethods({esc,btn,field,check}){return {

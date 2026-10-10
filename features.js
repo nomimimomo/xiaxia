@@ -1,4 +1,4 @@
-import { clone, uid, parseJSON, digest } from './core.js?v=1.9';
+import { clone, uid, parseJSON, digest } from './core.js?v=2.0';
 export const defaultPublisher = () => ({ id: 'builtin-hk', name: '街巷来信', intro: '用港媒笔触看故事里的世情与人物。', topics: '当地社会、民生、娱乐、人物传闻、街头见闻', style: '香港本地报刊口吻；标题简洁醒目，记者报道笔触，娱乐话题可有圈内消息、传闻及人物反应。措辞贴合故事所处年代。只借鉴口吻，不把其他世界强行设在香港。', script: 'simplified', followed: true, scope: '*', createdAt: Date.now() });
 export const defaultFeatures = () => ({ readStory:true });
 export function upgradeFeatures(state) {
@@ -33,19 +33,21 @@ export function splitChatText(value){
 }
 export function parseChatResponse(raw, members, mode, scope, contextRef, maxOptions = 100) {
     const data = parseJSON(raw), rows = Array.isArray(data) ? data : data.messages;
-    if (!Array.isArray(rows) || !rows.length || rows.length > 100) throw new Error('回复缺少有效消息列表');
+    if (!Array.isArray(rows) || rows.length > 100) throw new Error('回复缺少有效消息列表');
     const allowed = new Set(members), output = []; let count = 0;
     for (const r of rows) {
         if (!allowed.has(r.contactId)) throw new Error('回复包含非本会话成员，未写入');
         const kind = r.kind || 'text';
         if (!['text', 'option', 'publisher', 'style', 'group_name'].includes(kind)) throw new Error('消息类型无法识别');
         if (typeof r.text !== 'string' || (!r.text.trim() && kind !== 'publisher')) throw new Error('回复包含空消息');
-        const m = { id: uid(), side: 'ai', contactId: r.contactId, text: r.text.trim(), kind, createdAt: Date.now() };
+        if(r.mentions!==undefined&&(!Array.isArray(r.mentions)||r.mentions.some(x=>!allowed.has(x)&&x!=='user')))throw Error('@成员无效');
+        const m = { replyTo:typeof r.replyTo==='string'?r.replyTo:null, mentions:r.mentions||[], id: uid(), side: 'ai', contactId: r.contactId, text: r.text.trim(), kind, createdAt: Date.now() };
         if(kind==='group_name'){if(typeof r.groupName!=='string'||!r.groupName.trim()||r.groupName.length>100)throw Error('群名格式不正确');m.groupName=r.groupName.trim();}
         if (kind === 'option') {
             if (!contextRef) throw new Error('缺少正文来源，选项未写入');
             if (++count > maxOptions) continue;
             if(typeof r.reader==='string')m.reader=r.reader.trim().slice(0,80);
+            m.optionType=typeof r.optionType==='string'?r.optionType:'';
             m.insertText = typeof r.insertText === 'string' && r.insertText.trim() ? r.insertText.trim() : m.text; m.contextRef = clone(contextRef);
         }
         if (kind === 'style') { if(typeof r.styleId!=='string')throw Error('文风消息缺少来源');m.styleId=r.styleId; }
@@ -72,11 +74,13 @@ export function compileLocalMacros(messages, initial = {}) {
     return { messages: out, vars };
 }
 export function chatProtocol(mode, conf, members, user) {
- return `你在独立微信聊天中回复 ${user}。这是用户视角的微信聊天。预设人格可以处于元认知聊天空间；角色卡人物保留其世界观、知识边界、关系和说话方式，不强行变成点评故事的助手。每位成员用自己的身份、性格和口吻交谈。只让所列成员发言，不代替用户，不冒充虚构读者或未邀请的人。正文、角色设定、世界资料和启用预设会在后台一并提供。以最新剧情为依据，话题可自由展开。一次回复可以包含同一成员的多条消息；气泡结尾不留逗号；每个自然短句单独作为 messages 的一项，呈现连续发微信的节奏，不把整轮回复塞进一个长气泡。参考群聊状态栏的短句分行方式，每句不超过15字；普通逗号、句号不用，直接分为独立消息；保留 !/?/~/... 等语气符号，符号后另起消息；不统一改成客服或分析报告口吻。群聊主要由预设人格自然接话，人数不设最低要求，不强制轮流报到。参考无有居茶馆：ako、chimera和用户是主要活跃成员，但只使用当前已加入会话的人格，不自动拉人。CHAR和其他NPC偶尔出现，普通群聊中的出场概率要求极低（<5%）；明确被用户问到时可回答，不为了凑人数每轮发言。闺蜜深夜线上聊天语气，活泼或疗愈。用户的群聊状态栏设定优先。讨论正文时直接聊刚发生的具体片段、高光、槽点和后续走向，具体态度遵循各自人设。允许打趣、反驳、追问、突然想起一件事，不把每次聊天做成逐项答题。用户抱怨时不要默认回复通用安慰套话，不反复用“慢慢说，我听着”一类句式收尾。活泼或克制取决于各自人格，禁止把所有成员变成同一口吻。不要重复状态栏包装标签。
-用户让你生成选项、给出下一步建议或修改候选时，直接调用已经提供的预设中对应功能与要求，不额外进入任何模式，不自行指定固定数量或类别。预设的 choice 局部变量也会随资料提供。每个建议用正在聊天的成员本人口吻说出来，kind=option、text 为对用户说的话。若附带可直接填入酒馆输入框的行动或台词，另放 insertText；不要把提议者换成用户角色。若预设要求匿名读者来信，将读者网名放入 reader 字段；前六位按当轮剧情和吐槽点重新构思，禁止沿用上一轮，参考“你芝士甘薯吗”“栗子er”的表达方式但不要照抄；最后两位按预设使用 ako、chimera。reader 仅为来信署名，不加入联系人，也不替代 contactId。讨论继续用 text 即可。
+ return `你在独立微信聊天中回复 ${user}。这是用户视角的微信聊天。预设人格可以处于元认知聊天空间；角色卡人物保留其世界观、知识边界、关系和说话方式，不强行变成点评故事的助手。每位成员用自己的身份、性格和口吻交谈。只让所列成员发言，不代替用户，不冒充虚构读者或未邀请的人。正文、角色设定、世界资料和启用预设会在后台一并提供。以最新剧情为依据，话题可自由展开。一次回复可以包含同一成员的多条消息；气泡结尾不留逗号；每个自然短句单独作为 messages 的一项，呈现连续发微信的节奏，不把整轮回复塞进一个长气泡。参考群聊状态栏的短句分行方式，每句不超过15字；普通逗号、句号不用，直接分为独立消息；保留 !/?/~/... 等语气符号，符号后另起消息；不统一改成客服或分析报告口吻。群聊主要由预设人格自然接话，人数不设最低要求，不强制轮流报到。当前已加入的预设人格和用户是主要活跃成员，不自动拉人。CHAR和其他NPC偶尔出现，普通群聊中的出场概率要求极低（<5%）；明确被用户问到时可回答，不为了凑人数每轮发言。闺蜜深夜线上聊天语气，活泼或疗愈。用户的群聊状态栏设定优先。讨论正文时直接聊刚发生的具体片段、高光、槽点和后续走向，具体态度遵循各自人设。允许打趣、反驳、追问、突然想起一件事，不把每次聊天做成逐项答题。用户抱怨时不要默认回复通用安慰套话，不反复用“慢慢说，我听着”一类句式收尾。活泼或克制取决于各自人格，禁止把所有成员变成同一口吻。不要重复状态栏包装标签。
+用户让你生成选项、给出下一步建议或修改候选时，直接调用已经提供的预设中对应功能与要求，不额外进入任何模式，不自行指定固定数量或类别。预设的 choice 局部变量也会随资料提供。每个建议用正在聊天的成员本人口吻说出来，kind=option、text 为对用户说的话。若附带可直接填入酒馆输入框的行动或台词，另放 insertText；不要把提议者换成用户角色。若预设要求匿名读者来信，将读者网名放入 reader 字段；前六位按当轮剧情和吐槽点重新构思，禁止沿用上一轮，参考“你芝士甘薯吗”“栗子er”的表达方式但不要照抄；最后两位按所选预设的人格名字。reader 仅为来信署名，不加入联系人，也不替代 contactId。讨论继续用 text 即可。
 需要推荐文风时，只能从 fishboardStyleLibrary 的真实条目选择，以 kind=style 和准确 styleId 发出文件消息，text 可写推荐理由；禁止编造库里不存在的文风。
 想推荐故事内的公众号时可返回 kind=publisher 名片，用户点击关注后才订阅，不每轮强推。默认简体中文，港媒口吻不等于繁体。
+允许无人回应时返回{"messages":[]}。引用消息时可提供replyTo为历史消息id，@成员用mentions数组提供成员id。系统事件仅供感知，不必复述。
+本群可编辑规则：${conf?.socialRules||''}
 群聊成员可以自然地修改群名：返回 kind=group_name、groupName 为新群名、text 为改名说明。仅群聊可用，私聊不可改名。不要每轮改名。
 最终只返回 JSON {"messages":[{"contactId":"成员ID","kind":"text|option|publisher|style|group_name","text":"成员本人的消息","insertText":"选项可选的拟填入内容","styleId":"仅文风文件使用真实库ID","publisher":{"name":"仅公众号名片使用","intro":"简介","topics":"主题","style":"口吻","script":"simplified"}}]}。不使用的字段省略。
-成员：${JSON.stringify(members.map(m=>({contactId:m.id,name:m.name,bio:m.bio,origin:m.origin,sourceId:m.sourceId})))}`;
+成员：${JSON.stringify(members.map(m=>({contactId:m.id,kind:m.kind,name:m.name,bio:m.bio,origin:m.origin,sourceId:m.sourceId})))}`;
 }

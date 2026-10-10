@@ -1,4 +1,4 @@
-export const VERSION = '1.9';
+export const VERSION = '2.0';
 export const clone = x => JSON.parse(JSON.stringify(x));
 export function uid() {
     if (globalThis.crypto?.randomUUID) return crypto.randomUUID();
@@ -67,7 +67,7 @@ export function parseFeed(text, max) {
     if (!Array.isArray(rows)) throw Object.assign(new Error('信息流结果缺少 items 列表'),{stage:'feed_items'});
     return rows.slice(0, max).map((row,index) => {
         if (typeof row?.body !== 'string' || !row.body.trim() || typeof row?.author !== 'string') throw Object.assign(new Error('动态字段不完整，未写入'),{stage:'feed_row',row:index,bodyType:typeof row?.body,authorType:typeof row?.author});
-        return { id: uid(), author: row.author.slice(0, 120), title: String(row.title || '').slice(0, 200), body: row.body, createdAt: Date.now() };
+        return { id: typeof row.id==='string'?row.id:uid(), likes:parseLikes(row.likes), comments:parseComments(row.comments), author: row.author.slice(0, 120), title: String(row.title || '').slice(0, 200), body: row.body, createdAt: Date.now() };
     });
 }
 export function applyTurn(conv, reply, batchIds, replacement = null) {
@@ -81,10 +81,11 @@ export function applyTurn(conv, reply, batchIds, replacement = null) {
 export function mergeFeed(bucket, rows, signature, sources, limit) {
     const seen = new Set(bucket.items.map(x => (x.publisherId || '') + '\n' + x.author + '\n' + x.title + '\n' + x.body));
     for (const item of rows) {
+        const existing=item.id&&bucket.items.find(x=>x.id===item.id);if(existing){ if(existing.author!==item.author||existing.body!==item.body)throw Error('旧动态身份或正文不匹配'); const selfLikes=(existing.likes||[]).filter(x=>x.id.startsWith('user:'));existing.likes=[...selfLikes,...new Map([...(existing.likes||[]),...(item.likes||[])].filter(x=>!x.id.startsWith('user:')).map(x=>[x.id,x])).values()];const ids=new Set((existing.comments||[]).map(x=>x.id));existing.comments=[...(existing.comments||[]),...(item.comments||[]).filter(x=>x.authorId!=='user'&&!ids.has(x.id)&&!(existing.comments||[]).some(y=>y.author===x.author&&y.text===x.text))];continue;}
         const k = (item.publisherId || '') + '\n' + item.author + '\n' + item.title + '\n' + item.body;
         if (!seen.has(k)) { bucket.items.push({ ...item, signature, sources: clone(sources) }); seen.add(k); }
     }
-    bucket.items = bucket.items.slice(-Math.max(1, limit));
+    if(Number.isFinite(limit))bucket.items = bucket.items.slice(-Math.max(1, limit));
     bucket.lastSignature = signature; bucket.lastChecked = Date.now(); bucket.error = ''; bucket.retryCount = 0;
 }
 export function sourceStale(item, sources) { return (item.sources || []).some(x => !sources.some(y => y.index === x.index && y.hash === x.hash)); }
@@ -100,3 +101,6 @@ export function migrateLegacy(raw) {
     state.migration = { date: Date.now(), note: '旧版未记录完整成员和预设版本，请为旧会话选择成员；原浏览器记录未删除。' };
     return state;
 }
+
+function parseLikes(rows){if(rows===undefined)return [];if(!Array.isArray(rows))throw Error('点赞格式错误');return rows.map(r=>{if(typeof r?.name!=='string')throw Error('点赞人格式错误');return {id:typeof r.id==='string'?r.id:r.name,name:r.name.slice(0,120)};});}
+function parseComments(rows){if(rows===undefined)return [];if(!Array.isArray(rows))throw Error('评论格式错误');return rows.map(r=>{if(typeof r?.author!=='string'||typeof r.text!=='string')throw Error('评论字段格式错误');return {id:typeof r.id==='string'?r.id:uid(),author:r.author.slice(0,120),text:r.text,replyTo:typeof r.replyTo==='string'?r.replyTo:null,createdAt:Date.now()};});}

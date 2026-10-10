@@ -1,9 +1,9 @@
-import {installPullRefresh} from './pull-refresh.js?v=1.8';
-import {diagnostics} from './diagnostics.js?v=1.8';
-import {uid,clone} from './core.js?v=1.8';
-import {ctx,storyKey,characterItems} from './bridge.js?v=1.8';
-import {activePublishers} from './features.js?v=1.8';
-import {currentCharacter,fishboardStyles,fetchModels} from './chat-integration.js?v=1.8';
+import {installPullRefresh} from './pull-refresh.js?v=1.9';
+import {diagnostics} from './diagnostics.js?v=1.9';
+import {uid,clone} from './core.js?v=1.9';
+import {ctx,storyKey,characterItems} from './bridge.js?v=1.9';
+import {activePublishers} from './features.js?v=1.9';
+import {currentCharacter,fishboardStyles,fetchModels} from './chat-integration.js?v=1.9';
 export function wechatMethods({esc,btn,avatar,time,field}){return {
  syncCurrentCharacter(){
   if(!this.state)return null;const ch=currentCharacter();if(!ch)return null;

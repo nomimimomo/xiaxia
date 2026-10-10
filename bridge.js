@@ -1,6 +1,6 @@
-import {compactMessages,safeApiError} from './api-utils.js?v=1.8';
-import { diagnostics, instrument } from './diagnostics.js?v=1.8';
-import { clone, digest, orderedPrompts, parseJSON } from './core.js?v=1.8';
+import {compactMessages,safeApiError,extractAnswer,responseShape} from './api-utils.js?v=1.9';
+import { diagnostics, instrument } from './diagnostics.js?v=1.9';
+import { clone, digest, orderedPrompts, parseJSON } from './core.js?v=1.9';
 export const ctx = () => window.SillyTavern?.getContext?.();
 export function presets() {
     const m = ctx()?.getPresetManager?.('openai');
@@ -84,8 +84,12 @@ export class Generator {
                     const r = await fetch(url.href, { method: 'POST', signal: controller.signal, headers: { 'Content-Type': 'application/json', ...(s.customKey ? { Authorization: `Bearer ${s.customKey}` } : {}) }, body: JSON.stringify({ model: s.customModel.trim(), messages, max_tokens: Number(s.maxTokens) || 4096, stream: false }) });
                     diagnostics.log('request.response', {status:r.status});
                     if (!r.ok) { const detail=safeApiError(await r.text(),[s.customKey,s.customUrl],messages); diagnostics.apiError(r.status,detail); throw new Error(`API 请求失败（${r.status}）：${detail}`); }
-                    const x = await r.json(); const content = x.choices?.[0]?.message?.content || x.content?.[0]?.text || x.candidates?.[0]?.content?.parts?.map(p=>p.text||'').join('');
-                    if (typeof content !== 'string') throw new Error('API 没有返回文本'); return content;
+                    const raw = await r.text(); let x;
+                    try { x=JSON.parse(raw); } catch(e) { diagnostics.log('response.invalid',{stage:'envelope_json',characters:raw.length,position:Number(e.message.match(/position (\d+)/)?.[1]??-1),shapePreview:responseShape(raw)}); throw new Error('API 返回格式不是有效 JSON，详见错误报告'); }
+                    const answer=extractAnswer(x);
+                    diagnostics.log('response.extracted',{stage:'answer_extract',shape:answer.shape,finishReason:answer.finishReason,characters:answer.text.length,reasoningCharacters:answer.reasoningCharacters});
+                    if (!answer.text.trim()) throw new Error('API 没有返回文本，详见错误报告中的 answer_extract');
+                    return answer.text;
                 } finally { clearTimeout(timer); }
             }
             const c = ctx();

@@ -1,19 +1,20 @@
-import {automationMethods,storyBoundary} from './automation.js?v=1.8';
-import {txtMethods} from './txt-reader.js?v=1.8';
-import {bindPanelLayout} from './layout.js?v=1.8';
-import {resolveMembers,buildChatSetup} from './chat-context.js?v=1.8';
-import {trimConversation} from './retention.js?v=1.8';
-import { webReadingMethods } from './web-reading.js?v=1.8';
-import { interactionMethods } from './interaction.js?v=1.8';
-import { diagnostics, instrument } from './diagnostics.js?v=1.8';
-import { wechatMethods } from './wechat-ui.js?v=1.8';
-import { readingMethods } from './reading-ui.js?v=1.8';
-import { upgradeFeatures, features, activePublishers, feedSignature, parseChatResponse, parseArticles, compileLocalMacros, chatProtocol } from './features.js?v=1.8';
-import { featureMethods } from './feature-ui.js?v=1.8';
-import { convertText } from './text-script.js?v=1.8';
-import { VERSION, clone, uid, digest, freshState, validateState, parseReply, parseFeed, applyTurn, mergeFeed, worldBucket, sourceStale, migrateLegacy } from './core.js?v=1.8';
-import { Store } from './storage.js?v=1.8';
-import { ctx, presets, snapshot, promptRows, storyKey, storyName, characterItems, storyContext, Generator, sourceMessages } from './bridge.js?v=1.8';
+import {responseShape} from './api-utils.js?v=1.9';
+import {automationMethods,storyBoundary} from './automation.js?v=1.9';
+import {txtMethods} from './txt-reader.js?v=1.9';
+import {bindPanelLayout} from './layout.js?v=1.9';
+import {resolveMembers,buildChatSetup} from './chat-context.js?v=1.9';
+import {trimConversation} from './retention.js?v=1.9';
+import { webReadingMethods } from './web-reading.js?v=1.9';
+import { interactionMethods } from './interaction.js?v=1.9';
+import { diagnostics, instrument } from './diagnostics.js?v=1.9';
+import { wechatMethods } from './wechat-ui.js?v=1.9';
+import { readingMethods } from './reading-ui.js?v=1.9';
+import { upgradeFeatures, features, activePublishers, feedSignature, parseChatResponse, parseArticles, compileLocalMacros, chatProtocol } from './features.js?v=1.9';
+import { featureMethods } from './feature-ui.js?v=1.9';
+import { convertText } from './text-script.js?v=1.9';
+import { VERSION, clone, uid, digest, freshState, validateState, parseReply, parseFeed, applyTurn, mergeFeed, worldBucket, sourceStale, migrateLegacy } from './core.js?v=1.9';
+import { Store } from './storage.js?v=1.9';
+import { ctx, presets, snapshot, promptRows, storyKey, storyName, characterItems, storyContext, Generator, sourceMessages } from './bridge.js?v=1.9';
 
 const esc = v => String(v ?? '').replace(/[&<>"']/g, x => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[x]));
 const time = t => new Date(t).toLocaleString([], { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' });
@@ -430,7 +431,9 @@ class Shrimp {
         bucket.lastAttempt = Date.now(); this.status(`正在更新${type === 'moments' ? '朋友圈' : '公众号'}…`);
         try {
             await this.save();
-            const raw = await this.gen.call(messages), rows = type==='news'?parseArticles(raw,config.count,publishers):parseFeed(raw,config.count);
+            const raw = await this.gen.call(messages); let rows;
+            try { rows=type==='news'?parseArticles(raw,config.count,publishers):parseFeed(raw,config.count); }
+            catch(e) {diagnostics.log('feed.parse_failure',{operation:type,stage:e.stage||'feed_schema',characters:raw.length,position:e.position,row:e.row,bodyType:e.bodyType,authorType:e.authorType,shapePreview:responseShape(raw)});throw e;}
             for(const row of rows) { const script=publishers.find(p=>p.id===row.publisherId)?.script || 'simplified'; for(const key of ['title','summary','body']) if(row[key]) row[key]=await convertText(row[key],script); }
             if (storyKey() !== context.key) throw new Error('已切换故事，本次生成未写入');
             const now = await storyContext(this.state.settings,manual?-1:boundary.end); if (await feedSignature(now,type,this.state) !== signature) {bucket.pending=false;bucket.error='';await this.save();diagnostics.log('feed.deferred',{reason:'context_changed'});this.status('正文仍在修改，本次动态暂不发布');return;}

@@ -1,6 +1,6 @@
-import {readerLocation,validateReaderMessage} from './reader-link.js?v=1.8';
-import {uid} from './core.js?v=1.8';
-import {diagnostics} from './diagnostics.js?v=1.8';
+import {readerLocation,validateReaderMessage} from './reader-link.js?v=1.9';
+import {uid} from './core.js?v=1.9';
+import {diagnostics} from './diagnostics.js?v=1.9';
 export function webURL(value){const u=new URL(value.trim());if(!['https:','http:'].includes(u.protocol)||u.username||u.password)throw Error('请填写完整的 http / https 网页地址');return u.href;}
 export function webBook(v,old={}){return {...old,id:old.id||uid(),kind:'book',sourceType:'web',title:v.title.trim()||new URL(webURL(v.url)).hostname,url:webURL(v.url),coverUrl:v.coverUrl?.trim()?webURL(v.coverUrl):'',group:v.group?.trim()||'',createdAt:old.createdAt||Date.now()};}
 export function webReadingMethods({esc,btn,field}){return {
@@ -32,7 +32,7 @@ export function webReadingMethods({esc,btn,field}){return {
  if(a==='save'){const v=this.values(),old=this.modalData,r=webBook(v,old||{});try{const point=readerLocation(r.url);if(point)Object.assign(r,{sourceKind:'novel',bookKey:point.bookKey,lastUrl:point.url,lastChapter:point.chapterId});}catch{}if(new URL(r.url).origin===location.origin)throw Error('请填写阅读平台地址，不能嵌入酒馆自身');if(this.reading.rows('book').some(x=>x.url===r.url&&x.id!==r.id))throw Error('这个网页已经在书架中');await this.reading.put(old?.place||v.place||this.readingDefault||'browser',r);this.closeModal();this.render();return;}
  if(a==='open'){this.readerCurrentUrl=null;this.readerLastSaved=0;this.webKey=id;this.webText='';this.render();return;}
  if(a==='exit'){this.closeModal();await this.readerSaveChain;this.webKey=null;this.readerToken=null;this.webText='';this.render();return;}
- if(a==='menu'){this.modal('更多',`<div class="shr-mini-menu">${btn('web:reload','重新加载')}${btn('web:exit','返回书架')}</div><p class="shr-note">${this.readerLastError?'续读保存失败':this.readerLastSaved&&this.readerConnected?'已记录章节网址':'自动续读需安装配套脚本'}</p>`);return;}
+ if(a==='menu'){this.modal('更多',`<div class="shr-mini-menu">${btn('web:reload','重新加载')}</div><p class="shr-note">${this.readerLastError?'续读保存失败':this.readerLastSaved&&this.readerConnected?'已记录章节网址':'自动续读需安装配套脚本'}</p>`);return;}
  if(a==='reload'){this.closeModal();const frame=this.root.querySelector('.shr-web iframe');if(frame){const r=this.readingRow(this.webKey);frame.src=this.readerCurrentUrl||r.lastUrl||r.url;}return;}
  throw Error('此功能未提供');
  }

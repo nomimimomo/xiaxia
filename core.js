@@ -1,4 +1,4 @@
-export const VERSION = '1.8';
+export const VERSION = '1.9';
 export const clone = x => JSON.parse(JSON.stringify(x));
 export function uid() {
     if (globalThis.crypto?.randomUUID) return crypto.randomUUID();
@@ -50,7 +50,8 @@ export function parseJSON(text) {
         if(c==='"')quoted=true;else if(c==='{'||c==='[')depth++;else if(c==='}'||c===']'){if(--depth===0){if(/[\[{]/.test(clean.slice(i+1)))break;try{return JSON.parse(clean.slice(start,i+1));}catch{break;}}}
       }
     }
-    throw new Error('模型未返回有效 JSON，原有记录已保留，可重试');
+    let position=-1;try{JSON.parse(clean);}catch(e){position=Number(e.message.match(/position (\d+)/)?.[1]??-1);}
+    throw Object.assign(new Error('模型未返回有效 JSON，原有记录已保留，详见错误报告'),{stage:'model_json',position});
 }
 export function parseReply(text, members) {
     const data = parseJSON(text), rows = Array.isArray(data) ? data : data.messages;
@@ -62,10 +63,10 @@ export function parseReply(text, members) {
     });
 }
 export function parseFeed(text, max) {
-    const data = parseJSON(text), rows = Array.isArray(data) ? data : data.items;
-    if (!Array.isArray(rows)) throw new Error('信息流结果缺少 items 列表');
-    return rows.slice(0, max).map(row => {
-        if (typeof row.body !== 'string' || !row.body.trim() || typeof row.author !== 'string') throw new Error('动态字段不完整，未写入');
+    const data = parseJSON(text), rows = Array.isArray(data) ? data : data?.items;
+    if (!Array.isArray(rows)) throw Object.assign(new Error('信息流结果缺少 items 列表'),{stage:'feed_items'});
+    return rows.slice(0, max).map((row,index) => {
+        if (typeof row?.body !== 'string' || !row.body.trim() || typeof row?.author !== 'string') throw Object.assign(new Error('动态字段不完整，未写入'),{stage:'feed_row',row:index,bodyType:typeof row?.body,authorType:typeof row?.author});
         return { id: uid(), author: row.author.slice(0, 120), title: String(row.title || '').slice(0, 200), body: row.body, createdAt: Date.now() };
     });
 }

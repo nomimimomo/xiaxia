@@ -1,5 +1,5 @@
-import {characterItems,sourceMessages} from './bridge.js?v=2.0';
-import {compileLocalMacros} from './features.js?v=2.0';
+import {characterItems,sourceMessages} from './bridge.js?v=11.0';
+import {compileLocalMacros} from './features.js?v=11.0';
 export function resolveMembers(members,cards=characterItems()){
  return members.map(m=>{
   if(m.kind!=='character')return m;

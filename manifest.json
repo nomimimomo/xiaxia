@@ -1,13 +1,12 @@
 {
-  "display_name": "🍤 鲜虾",
-  "author": "Ameki",
-  "version": "2.0",
-  "description": "独立微信式助手：预设人格聊天、行动选项、公众号订阅、书架与摘抄。",
-  "js": "index.js",
-  "css": "style.css",
-  "loading_order": 50,
+  "display_name": "鲜虾鱼板面",
+  "loading_order": 10,
   "requires": [],
   "optional": [],
-  "auto_update": false,
+  "js": "index.js",
+  "css": "style.css",
+  "author": "鲜虾鱼板面",
+  "version": "11.0",
+  "license": "UNLICENSED",
   "generate_interceptor": "ameShrimpSocialInterceptor"
 }

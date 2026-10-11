@@ -1,11 +1,11 @@
-import {VERSION} from './core.js?v=2.0';
+import {VERSION} from './core.js?v=11.0';
 export function errorReason(e) {
  const message=String(e?.message||'');
  for(const [pattern,code] of [[/酒馆正在生成/,'tavern_busy'],[/鲜虾正在生成/,'shrimp_busy'],[/冲突|其他页面|其他设备/,'storage_conflict'],[/超时|abort/i,'timeout'],[/fetch|network/i,'network'],[/JSON|格式|没有返回文本/,'response_format'],[/预设|Prompt/,'preset'],[/切换|已变化|已改变/,'context_changed'],[/保存|读取/,'storage'],[/API|模型|地址/,'api_configuration']]) if(pattern.test(message))return code;
  return 'unclassified';
 }
 // Metadata only. Never pass prompts, message text, keys, URLs or API bodies here.
-const KEY = 'ame-shrimp-diagnostics-v1';
+const KEY = '鲜虾鱼板面.social.diagnostics.v1';
 export class Diagnostics {
     constructor(storage) {
         this.storage = storage; this.rows = []; this.sequence = 0; this.active = new Map(); this.persistence = true;
@@ -19,6 +19,7 @@ export class Diagnostics {
             else if (typeof v === 'string') safe[key] = v.replace(/[^a-zA-Z0-9_.:-]/g, '_').slice(0,80);
         }
         if(typeof data.shapePreview==='string') safe.shapePreview=data.shapePreview.replace(/[^{}\[\]:,"\s x]/g,'x').slice(0,600);
+        window.AmeFishboard?.logShrimp?.(event,safe);
         this.rows.push({ time: new Date().toISOString(), event, ...safe }); this.rows = this.rows.slice(-500);
         try { this.storage?.setItem(KEY, JSON.stringify(this.rows)); } catch { this.persistence = false; }
     }

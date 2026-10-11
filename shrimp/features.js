@@ -1,4 +1,4 @@
-import { clone, uid, parseJSON, digest } from './core.js?v=2.0';
+import { clone, uid, parseJSON, digest } from './core.js?v=11.0';
 export const defaultPublisher = () => ({ id: 'builtin-hk', name: '街巷来信', intro: '用港媒笔触看故事里的世情与人物。', topics: '当地社会、民生、娱乐、人物传闻、街头见闻', style: '香港本地报刊口吻；标题简洁醒目，记者报道笔触，娱乐话题可有圈内消息、传闻及人物反应。措辞贴合故事所处年代。只借鉴口吻，不把其他世界强行设在香港。', script: 'simplified', followed: true, scope: '*', createdAt: Date.now() });
 export const defaultFeatures = () => ({ readStory:true });
 export function upgradeFeatures(state) {
@@ -24,13 +24,7 @@ export function sanitizePublisher(p, scope) {
     if (!p || !['name', 'intro', 'topics', 'style'].every(k => typeof p[k] === 'string' && p[k].trim())) throw new Error('公众号名片缺少名称、简介、主题或口吻，请让人格重新推荐');
     return { name: p.name.trim().slice(0, 80), intro: p.intro.trim().slice(0, 1000), topics: p.topics.trim().slice(0, 2000), style: p.style.trim().slice(0, 3000), script: ['simplified', 'traditional'].includes(p.script) ? p.script : 'simplified', scope: scope || '*' };
 }
-export function splitChatText(value){
- const segments=String(value).split(/\n+/).flatMap(line=>/https?:\/\//.test(line)?[line]:line.replace(/\.{3,}|…+|[!?！？~～]+/gu,m=>m+'\n').split(/[，,。；;：:]|(?<!\.)\.(?!\.)|\n+/u));
- const out=[];for(const raw of segments){const text=raw.trim();if(!text)continue;if(/https?:\/\//.test(text)){out.push(text);continue;}
- const chars=typeof Intl.Segmenter==='function'?[...new Intl.Segmenter('zh',{granularity:'grapheme'}).segment(text)].map(x=>x.segment):Array.from(text);
- for(let i=0;i<chars.length;i+=15){const chunk=chars.slice(i,i+15).join('').trim();if(chunk)out.push(chunk);}}
- return out;
-}
+export function splitChatText(value){return String(value).split(/\n\s*\n/).map(s=>s.trim()).filter(Boolean);}
 export function parseChatResponse(raw, members, mode, scope, contextRef, maxOptions = 100) {
     const data = parseJSON(raw), rows = Array.isArray(data) ? data : data.messages;
     if (!Array.isArray(rows) || rows.length > 100) throw new Error('回复缺少有效消息列表');

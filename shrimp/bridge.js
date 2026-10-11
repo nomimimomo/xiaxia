@@ -1,6 +1,7 @@
-import {compactMessages,safeApiError,extractAnswer,responseShape} from './api-utils.js?v=2.0';
-import { diagnostics, instrument } from './diagnostics.js?v=2.0';
-import { clone, digest, orderedPrompts, parseJSON } from './core.js?v=2.0';
+import {recentProse} from '../context-isolation.js?v=11.0';
+import {compactMessages,safeApiError,extractAnswer,responseShape} from './api-utils.js?v=11.0';
+import { diagnostics, instrument } from './diagnostics.js?v=11.0';
+import { clone, digest, orderedPrompts, parseJSON } from './core.js?v=11.0';
 export const ctx = () => window.SillyTavern?.getContext?.();
 export function presets() {
     const m = ctx()?.getPresetManager?.('openai');
@@ -31,10 +32,9 @@ async function readStoryContext(settings, endIndex = -1) {
     const c = ctx(), key = storyKey(); if (!key) throw new Error('请先打开一个酒馆聊天');
     const last = endIndex < 0 ? (c.chat || []).length - 1 : endIndex;
     if (!Number.isInteger(last) || last < -1 || last >= (c.chat || []).length) throw new Error('所选楼层已不存在，请重新选择');
-    const all = (c.chat || []).slice(0, last + 1).map((m, index) => ({ index, name: m.name, user: !!m.is_user, text: String(m.mes || '') })).filter(m => m.text);
-    const sources = await Promise.all(all.map(async m => ({ index: m.index, hash: await digest(m.text) })));
-    let remain = settings.contextLimit, chosen = [];
-    for (const m of [...all].reverse()) { if (remain <= 0) break; const text = m.text.slice(-remain); chosen.unshift({ ...m, text }); remain -= text.length; }
+    const all=recentProse(c.chat||[],last,settings.contextLimit);
+    const sources=await Promise.all(all.map(async m=>({index:m.index,hash:await digest(String(c.chat[m.index].mes||''))})));
+    const chosen=all;
     diagnostics.log('context.worldInfo');
     const wi = await import('/scripts/world-info.js');
     const character = c.characters?.[c.characterId];
@@ -68,7 +68,7 @@ async function readStoryContext(settings, endIndex = -1) {
 }
 export class Generator {
     constructor(getState) { this.getState = getState; this.busy = false; }
-    async call(messages) {
+    async call(messages,options={}) {
         if (this.busy) throw new Error('鲜虾正在生成，请稍后再试');
         const s = this.getState().settings; this.busy = true;
         try {
@@ -81,13 +81,14 @@ export class Generator {
                 const controller = new AbortController(), timer = setTimeout(() => controller.abort(), 120000);
                 try {
                     diagnostics.log('request.dispatched', {mode:'custom',count:messages.length});
-                    const r = await fetch(url.href, { method: 'POST', signal: controller.signal, headers: { 'Content-Type': 'application/json', ...(s.customKey ? { Authorization: `Bearer ${s.customKey}` } : {}) }, body: JSON.stringify({ model: s.customModel.trim(), messages, max_tokens: Number(s.maxTokens) || 4096, stream: false }) });
+                    const r = await fetch(url.href, { method: 'POST', signal: controller.signal, headers: { 'Content-Type': 'application/json', ...(s.customKey ? { Authorization: `Bearer ${s.customKey}` } : {}) }, body: JSON.stringify({ model: s.customModel.trim(), messages, max_tokens: options.maxTokens || Number(s.maxTokens) || 4096, stream: false }) });
                     diagnostics.log('request.response', {status:r.status});
                     if (!r.ok) { const detail=safeApiError(await r.text(),[s.customKey,s.customUrl],messages); diagnostics.apiError(r.status,detail); throw new Error(`API 请求失败（${r.status}）：${detail}`); }
                     const raw = await r.text(); let x;
                     try { x=JSON.parse(raw); } catch(e) { diagnostics.log('response.invalid',{stage:'envelope_json',characters:raw.length,position:Number(e.message.match(/position (\d+)/)?.[1]??-1),shapePreview:responseShape(raw)}); throw new Error('API 返回格式不是有效 JSON，详见错误报告'); }
                     const answer=extractAnswer(x);
                     diagnostics.log('response.extracted',{stage:'answer_extract',shape:answer.shape,finishReason:answer.finishReason,characters:answer.text.length,reasoningCharacters:answer.reasoningCharacters});
+                    if(answer.finishReason==='length')throw Error('回复达到输出上限，请提高输出长度后手动重试，原动态已保留');
                     if (!answer.text.trim()) throw new Error('API 没有返回文本，详见错误报告中的 answer_extract');
                     return answer.text;
                 } finally { clearTimeout(timer); }
@@ -99,7 +100,7 @@ export class Generator {
             if (document.querySelector('#send_but')?.classList.contains('disabled') || c.streamingProcessor && !c.streamingProcessor.isFinished && !c.streamingProcessor.isStopped) throw new Error('酒馆正在生成，请稍后再试');
             // Do not select/mutate presets, Prompt switches, or response-length settings.
             diagnostics.log('request.dispatched', {mode:'tavern',count:messages.length});
-            return await c.generateRaw({ prompt: messages, trimNames: false });
+            let timeout;try{return await Promise.race([c.generateRaw({prompt:messages,trimNames:false,responseLength:options.maxTokens||Number(s.maxTokens)||4096}),new Promise((_,reject)=>{timeout=setTimeout(()=>reject(Error('独立生成超时，原记录保留；请确认酒馆请求结束后重试')),120000);})]);}finally{clearTimeout(timeout);}
         } catch (e) { if (e.name === 'AbortError') throw new Error('请求超时，原记录已保留'); throw e; }
         finally { this.busy = false; }
     }

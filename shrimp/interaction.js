@@ -1,6 +1,6 @@
-import {appendSystem} from './social.js?v=2.0';
-import {uid} from './core.js?v=2.0';
-import {diagnostics} from './diagnostics.js?v=2.0';
+import {appendSystem} from './social.js?v=11.0';
+import {uid} from './core.js?v=11.0';
+import {diagnostics} from './diagnostics.js?v=11.0';
 export const defaultGroupName=(self,members)=>[self,...members].join('、')+`（${members.length+1}）`;
 export function interactionMethods({esc,btn,avatar}) { return {
  updateBusyButtons(){
@@ -13,12 +13,12 @@ export function interactionMethods({esc,btn,avatar}) { return {
  async dispatch(a,id){if(a==='queue')return this.action(a,id);this.pendingActions ||= new Set();const key=JSON.stringify([a,id||'']);if(this.pendingActions.has(key))return;this.pendingActions.add(key);this.updateBusyButtons();try{return await this.action(a,id);}finally{this.pendingActions.delete(key);this.updateBusyButtons();}},
  editChatMessage(id){
   if(this.sending||this.gen.busy)throw Error('请等待当前回复结束后编辑');
-  const m=this.conversation()?.messages.find(m=>m.id===id);if(!m)return;
+  const m=this.conversation()?.messages.find(m=>m.id===id);if(!m||m.side!=='user')return;
   this.closeModal();this.editingMessage=id;this.editText=m.text;this.render();const input=this.root.querySelector('.shr-inline-edit textarea');input?.focus();
  },
  async inlineCommit(resend){
   if(this.sending||this.gen.busy)throw Error('请等待当前回复结束');
-  const c=this.conversation(),m=c?.messages.find(m=>m.id===this.editingMessage);if(!m)return;
+  const c=this.conversation(),m=c?.messages.find(m=>m.id===this.editingMessage);if(!m||m.side!=='user')return;
   const text=this.editText.trim();if(!text)throw Error('消息不能为空');
   m.text=text;if(m.kind==='option')m.insertText=text;
   this.editingMessage=null;this.editText='';await this.save();this.render();

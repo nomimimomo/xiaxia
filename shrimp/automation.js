@@ -1,9 +1,9 @@
-import {ctx,storyKey,storyContext} from './bridge.js?v=2.0';
-import {buildChatSetup,resolveMembers} from './chat-context.js?v=2.0';
-import {chatProtocol,parseChatResponse} from './features.js?v=2.0';
-import {digest,uid} from './core.js?v=2.0';
-import {trimConversation} from './retention.js?v=2.0';
-import {diagnostics} from './diagnostics.js?v=2.0';
+import {ctx,storyKey,storyContext} from './bridge.js?v=11.0';
+import {buildChatSetup,resolveMembers} from './chat-context.js?v=11.0';
+import {chatProtocol,parseChatResponse} from './features.js?v=11.0';
+import {digest,uid} from './core.js?v=11.0';
+import {trimConversation} from './retention.js?v=11.0';
+import {diagnostics} from './diagnostics.js?v=11.0';
 // Stability is an observable delay, not an assertion that the user approved the prose.
 export function storyBoundary(chat){return {end:chat.length-1,count:chat.filter(m=>!m.is_user&&!m.is_system&&String(m.mes||'').trim()).length};}
 export function observeStory(previous,fingerprint,now,delay){const since=previous?.fingerprint===fingerprint?previous.since:now;return {fingerprint,since,ready:now-since>=delay};}
@@ -25,7 +25,7 @@ export function automationMethods({field,btn}){return {
     const raw=await this.gen.call([...compiled.messages,{role:'system',content:chatProtocol('chat',{socialRules:this.state.settings.socialRules},members,ctx().name1||'User')+' 这次是你主动找用户聊几句，结合当前剧情和聊天关系，不假装用户刚发了消息。只输出text消息，不改群名，不发送功能卡片。'},{role:'user',content:JSON.stringify({storyContext:context.data,localChoiceInstruction:compiled.vars.choice||'',history:c.messages.slice(-this.state.settings.historyLimit)})}]);
     if(storyKey()!==key||await digest(c.messages)!==captured||c.draft?.trim())return;
     const now=await storyContext(this.state.settings,boundary.end);if(now.signature!==context.signature)return;
-    const rows=parseChatResponse(raw,members.map(m=>m.id),'chat',key,null).filter(m=>m.kind==='text');const turnId=uid();c.messages.push(...rows.map(m=>({...m,turnId,proactive:true})));c.updatedAt=Date.now();trimConversation(c,this.state.settings.chatLimit);await this.save();diagnostics.log('chat.proactive',{count:rows.length,floor:boundary.count});if(this.visible&&!this.root.querySelector('.shr-modal'))this.render();
+    const rows=parseChatResponse(raw,members.map(m=>m.id),'chat',key,null).filter(m=>m.kind==='text');const turnId=uid();c.messages.push(...rows.map(m=>({...m,turnId,proactive:true})));c.updatedAt=Date.now();if(!(this.visible&&this.tab==='chats'&&this.conversation()?.id===c.id))c.unread=(c.unread||0)+rows.length;trimConversation(c,this.state.settings.chatLimit);await this.save();diagnostics.log('chat.proactive',{count:rows.length,floor:boundary.count});if(this.visible&&!this.root.querySelector('.shr-modal'))this.render();
    }catch(e){diagnostics.log('chat.proactive.failed',{reason:e.name});this.status('主动消息生成失败，可在聊天中手动重试',true);}
    finally{this.refreshing=false;this.lastAutoFinished=Date.now();this.updateBusyButtons();}return;
   }

@@ -1,7 +1,8 @@
-import {uid,clone} from './core.js?v=2.0';
-import {ctx,storyKey} from './bridge.js?v=2.0';
-import {diagnostics} from './diagnostics.js?v=2.0';
-export const defaultSocialRules=`群聊主要由当前加入的预设人格和User活跃。CHAR及其他NPC极少出没，不强迫参与，不轮流报到。允许零条消息、连续发言、互相引用、接梗、跑题与长期潜水。被@或拍一拍可以感知，不强制回应。按各自人格使用闺蜜深夜线上聊天语气，活泼或疗愈；直接聊刚才正文的高光、槽点及后续，不写分析报告。每句不超过15字，普通标点改为分泡，保留!/?/~/...等语气。用户请求行动选项时，遵循预设choice与状态栏：依次为日常、主线、恋爱、成人情境、搞笑、时间、两位预设人格如果是User共八类；前六个读者网名按本轮剧情重新构思，不沿用上一轮，不照抄示例；最后两位用对应预设人格名字。读者来信不是新群成员。`;
+import {uid,clone} from './core.js?v=11.0';
+import {ctx,storyKey} from './bridge.js?v=11.0';
+import {diagnostics} from './diagnostics.js?v=11.0';
+export const defaultSocialRules=`群成员按各自的生活、关系和当下话题自然聊天。每轮可以没人发言，也可以同一人连续发多条。允许互相交流、插话、跑题、接梗、争论和潜水。不按名单轮流回复，不要求回应User，不默认由Char主持。不强行限制每句话字数。引用、@和群事件作为具体互动理解。延续已有话题，但不为热闹制造无关消息。`;
+
 export function appendSystem(c,text,event={}){const m={id:uid(),side:'system',kind:'system',text,event,createdAt:Date.now(),status:'pending'};c.messages.push(m);c.updatedAt=m.createdAt;return m;}
 export function messageContext(m,c){return {id:m.id,sender:m.side==='user'?'User':m.contactId||m.side,text:m.revoked?'撤回了一条消息':m.text,kind:m.kind||'text',replyTo:m.replyTo||null,quoted:m.replyTo?(()=>{const q=c.messages.find(x=>x.id===m.replyTo);return q?{id:q.id,text:q.revoked?'消息已撤回':q.text,sender:q.contactId||q.side}:null;})():null,mentions:m.mentions||[],event:m.event||null};}
 export function socialMethods({esc,btn,field}){return {
@@ -9,14 +10,14 @@ export function socialMethods({esc,btn,field}){return {
  async socialAction(a,id){const c=this.conversation(),m=c?.messages.find(x=>x.id===id);
  if(a==='settings')return this.socialSettings();
  if(a==='saveRules'){const v=this.values();this.state.settings.socialRules=v.socialRules;this.state.settings.patSuffix=v.patSuffix;await this.save();this.closeModal();return;}
- if(a==='menu'){if(!m||m.revoked)return;this.modal('消息',`<div class="shr-pre">${esc(m.text)}</div>`,btn('soc:quote','引用',id)+btn('soc:copy','复制',id)+btn('editChatMessage','编辑',id)+btn('soc:delete','删除',id)+(m.side==='user'?btn('soc:revoke','撤回',id):''));return;}
+ if(a==='menu'){return this.messageMenu(id);}
  if(a==='copy'){await navigator.clipboard.writeText(m.text);this.closeModal();return;}
  if(a==='quote'){c.replyTo=id;this.closeModal();this.render();this.root.querySelector('#shr-draft')?.focus();return;}
  if(a==='cancelQuote'){delete c.replyTo;this.render();return;}
  if(a==='locate'){const i=c.messages.findIndex(x=>x.id===id);if(i<0){this.status('原消息已删除或清理');return;}this.pageSize=Math.max(this.pageSize,c.messages.length-i);this.closeModal();this.render();const el=[...this.root.querySelectorAll('[data-message-id]')].find(e=>e.dataset.messageId===id);el?.scrollIntoView({block:'center'});el?.classList.add('shr-highlight');return;}
- if(a==='delete'||a==='revoke'){if(this.sending||this.gen.busy)throw Error('请等待生成完成');if(!m)return;if(a==='revoke'){m.revoked=true;m.text='撤回了一条消息';m.kind='system';m.side='system';m.status='pending';delete m.attachment;delete m.insertText;delete m.mentions;}else c.messages=c.messages.filter(x=>x.id!==id);await this.save();this.closeModal();this.render();return;}
+ if(a==='delete'||a==='revoke'){if(this.sending||this.gen.busy)throw Error('请等待生成完成');if(!m)return;if(a==='revoke'){if(m.side!=='user')return;m.revoked=true;m.text='撤回了一条消息';m.kind='system';m.side='system';m.status='pending';delete m.attachment;delete m.insertText;delete m.mentions;}else c.messages=c.messages.filter(x=>x.id!==id);await this.save();this.closeModal();this.render();return;}
  if(a==='at'){this.modal('@成员',c.members.map(x=>btn('soc:mention',esc(c.nicknames?.[x]||this.contact(x)?.name||'成员'),x)).join(''));return;}
- if(a==='mention'){if(!c.members.includes(id))return;c.draft=(c.draft||'')+'@'+(c.nicknames?.[id]||this.contact(id)?.name)+' ';c.draftMentions=[...new Set([...(c.draftMentions||[]),id])];this.closeModal();this.render();this.root.querySelector('#shr-draft')?.focus();return;}
+ if(a==='mention'){if(!c.members.includes(id))return;c.draft=(c.draft||'').replace(/@$/,'')+'@'+(c.nicknames?.[id]||this.contact(id)?.name)+' ';c.draftMentions=[...new Set([...(c.draftMentions||[]),id])];this.closeModal();this.render();this.root.querySelector('#shr-draft')?.focus();return;}
  if(a==='pat'){const p=id==='user'?this.self():this.contact(id);if(!p||id!=='user'&&!c.members.includes(id))return;appendSystem(c,`${this.self().name}拍了拍${p.name}${id==='user'?this.state.settings.patSuffix||'':p.patSuffix||''}`,{type:'pat',target:id});await this.save();this.render();return;}
  if(a==='search'){this.modal('查找聊天记录','<input id="shr-history-search" placeholder="搜索消息"><div id="shr-history-results"></div>');return;}
  if(a==='leave'){if(this.sending)throw Error('请等待生成完成');appendSystem(c,`${this.self().name}退出了群聊`,{type:'leave',target:'user'});c.left=true;await this.save();this.groupPanel=false;this.render();return;}

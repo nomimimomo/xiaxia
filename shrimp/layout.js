@@ -1,12 +1,12 @@
-import {diagnostics} from './diagnostics.js?v=2.0';
+import {diagnostics} from './diagnostics.js?v=11.0';
 // Adapted from the supplied fishboard viewport/band/rect correction rules.
 export function panelBounds(vp,topBar,sendForm,mobile){
  let top=vp.y+8,bottom=vp.y+vp.h-8;
  if(topBar)top=Math.max(top,topBar.bottom+8);
  if(sendForm&&sendForm.top>top)bottom=Math.min(bottom,sendForm.top-8);
  bottom=Math.max(top+1,bottom);
- const inset=vp.w*.02,width=Math.max(1,Math.min(mobile?620:680,vp.w-2*inset));
- const height=mobile?Math.min(620,vp.h-28,bottom-top):bottom-top;
+ const inset=vp.w*.02,width=Math.max(1,Math.min(mobile?620:1120,vp.w-2*inset));
+ const height=mobile?Math.min(vp.h-16,bottom-top):bottom-top;
  return {left:vp.x+(vp.w-width)/2,top:mobile?top+(bottom-top-height)/2:top,width,height:Math.max(1,height),inset};
 }
 export function fitPanel(panel){

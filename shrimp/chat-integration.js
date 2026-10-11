@@ -1,4 +1,4 @@
-import {ctx,characterItems} from './bridge.js?v=2.0';
+import {ctx,characterItems} from './bridge.js?v=11.0';
 export function currentCharacter(){
  const c=ctx(),ch=c?.characters?.[c.characterId];if(!ch)return null;
  return characterItems().find(x=>x.id===(ch.avatar||String(c.characterId)))||null;
@@ -12,6 +12,7 @@ export async function fetchModels(address,key,signal){
 export function fishboardStyles(){
  // Read-only bridge to the actual fishboard 10.30 storage keys. Never write or merge retired caches.
  const key='鲜虾鱼板面.data.v1',base='ame-style-management-v05';
+ if(window.AmeFishboard?.getData)return (window.AmeFishboard.getData().styles||[]).map(s=>({...s,text:s.content||s.text||''}));
  const mode=localStorage.getItem(base+'_storage_choice_v1')||'tavern';let data=null;
  if(mode!=='browser'){
   const get=typeof window.getVariables==='function'?window.getVariables:window.TavernHelper?.getVariables?.bind(window.TavernHelper);

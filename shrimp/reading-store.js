@@ -1,4 +1,4 @@
-import {uid, clone, digest} from './core.js?v=2.0';
+import {uid, clone, digest} from './core.js?v=11.0';
 export const emptyLibrary=()=>({schema:1,revision:null,items:[]});
 const valid=x=>{if(!x||x.schema!==1||!Array.isArray(x.items)||x.items.some(r=>!r.id||!['book','excerpt'].includes(r.kind)))throw Error('书架数据格式不正确，未覆盖');return x;};
 export const excerptLines=text=>String(text).replace(/^\uFEFF/,'').split(/\r\n|\n|\r/).map(s=>s.trim()).filter(Boolean);
@@ -10,9 +10,9 @@ export class BrowserLibrary {
  async write(data,expected){const db=await this.open();return new Promise((ok,no)=>{const tx=db.transaction('libraries','readwrite'),s=tx.objectStore('libraries'),r=s.get(this.scope);let conflict=false;r.onsuccess=()=>{if((r.result?.revision??null)!==expected){conflict=true;tx.abort();return;}s.put(data,this.scope);};tx.oncomplete=()=>ok();tx.onerror=()=>no(tx.error);tx.onabort=()=>no(Error(conflict?'其他页面修改了书架，请刷新书架后重试':'浏览器保存失败，可能空间不足'));});}
 }
 export class TavernLibrary {
- constructor(headers){this.headers=headers;this.path='/user/files/ame-shrimp-reading-v1.json';}
- async read(){const r=await fetch(this.path+'?t='+Date.now(),{cache:'no-store',credentials:'same-origin'});if(r.status===404)return emptyLibrary();if(!r.ok)throw Error('酒馆书架读取失败：'+r.status);return valid(await r.json());}
- async write(data,expected){if((await this.read()).revision!==expected)throw Error('其他设备修改了书架，请刷新书架后重试');const bytes=new TextEncoder().encode(JSON.stringify(data));if(bytes.length>25*1024*1024)throw Error('酒馆书架超过 25MB，请将部分书移到浏览器');let binary='';for(let i=0;i<bytes.length;i+=8192)binary+=String.fromCharCode(...bytes.subarray(i,i+8192));const r=await fetch('/api/files/upload',{method:'POST',headers:this.headers(),body:JSON.stringify({name:'ame-shrimp-reading-v1.json',data:btoa(binary)})});if(!r.ok)throw Error('酒馆书架保存失败：'+r.status);}
+ constructor(headers){this.headers=headers;this.path='/user/files/ame-fishboard-reading-v1.json';}
+ async read(){let r=await fetch(this.path+'?t='+Date.now(),{cache:'no-store',credentials:'same-origin',signal:AbortSignal.timeout(20000)});if(r.status===404)r=await fetch('/user/files/ame-shrimp-reading-v1.json?t='+Date.now(),{cache:'no-store',signal:AbortSignal.timeout(20000)});if(r.status===404)return emptyLibrary();if(!r.ok)throw Error('酒馆书架读取失败：'+r.status);return valid(await r.json());}
+ async write(data,expected){if((await this.read()).revision!==expected)throw Error('其他设备修改了书架，请刷新书架后重试');const bytes=new TextEncoder().encode(JSON.stringify(data));if(bytes.length>25*1024*1024)throw Error('酒馆书架超过 25MB，请将部分书移到浏览器');let binary='';for(let i=0;i<bytes.length;i+=8192)binary+=String.fromCharCode(...bytes.subarray(i,i+8192));const r=await fetch('/api/files/upload',{method:'POST',signal:AbortSignal.timeout(30000),headers:this.headers(),body:JSON.stringify({name:'ame-fishboard-reading-v1.json',data:btoa(binary)})});if(!r.ok)throw Error('酒馆书架保存失败：'+r.status);}
 }
 export class ReadingRepository {
  constructor(local,remote){this.adapters={browser:local,tavern:remote};this.data={};this.chain=Promise.resolve();}

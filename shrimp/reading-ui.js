@@ -1,12 +1,12 @@
-import {uid} from './core.js?v=2.0';
-import {BrowserLibrary,TavernLibrary,ReadingRepository,bookFromFile,excerptLines,exportExcerpts} from './reading-store.js?v=2.0';
-import {diagnostics} from './diagnostics.js?v=2.0';
-import {ctx} from './bridge.js?v=2.0';
+import {uid} from './core.js?v=11.0';
+import {BrowserLibrary,TavernLibrary,ReadingRepository,bookFromFile,excerptLines,exportExcerpts} from './reading-store.js?v=11.0';
+import {diagnostics} from './diagnostics.js?v=11.0';
+import {ctx} from './bridge.js?v=11.0';
 const label=p=>p==='tavern'?'酒馆':'当前浏览器';
 const key=r=>r.place+':'+r.id;
 export function readingMethods({esc,btn,field,check}){return {
  async readingLoad(){ diagnostics.log('reading.load.start');
-  if(!this.reading){const r=await fetch('/api/users/me',{headers:ctx().getRequestHeaders()});if(!r.ok)throw Error('无法确认酒馆账户，暂不打开书架，避免混用浏览器记录');const user=await r.json();if(!user.handle)throw Error('未取得酒馆账户名称');this.readingScope=user.handle;try{this.readingDefault=localStorage.getItem('shrimp-reading-default:'+user.handle)||'browser';}catch{}this.reading=new ReadingRepository(new BrowserLibrary(user.handle),new TavernLibrary(()=>ctx().getRequestHeaders()));}
+  if(!this.reading){const r=await fetch('/api/users/me',{signal:AbortSignal.timeout(20000),headers:ctx().getRequestHeaders()});if(!r.ok)throw Error('无法确认酒馆账户，暂不打开书架，避免混用浏览器记录');const user=await r.json();if(!user.handle)throw Error('未取得酒馆账户名称');this.readingScope=user.handle;try{this.readingDefault=localStorage.getItem('shrimp-reading-default:'+user.handle)||'browser';}catch{}this.reading=new ReadingRepository(new BrowserLibrary(user.handle),new TavernLibrary(()=>ctx().getRequestHeaders()));}
   await this.reading.load();this.readingReady=true;diagnostics.log('reading.load.success');
  },
  async readingOpen(){if(this.readingOpening)return;this.readingOpening=true;this.tab='reading';this.detail=false;this.groupPanel=false;this.activePublisher='';this.readingKind||='book';this.readingSelection||=new Set();this.render();try{await diagnostics.run('readingOpen',()=>this.readingLoad());}finally{this.readingOpening=false;if(this.tab==='reading')this.render();}},
